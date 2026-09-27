@@ -1,0 +1,19 @@
+# Build and Output
+bin/
+obj/
+dist/
+out/
+build/
+*.user
+*.suo
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+
+# Local context outputs
+*-context.md

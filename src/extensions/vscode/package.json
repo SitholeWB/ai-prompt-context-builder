@@ -1,0 +1,205 @@
+{
+  "name": "ai-context-builder",
+  "displayName": "AI Context Builder",
+  "description": "Generate portable, dependency-aware, AI-ready source context from an existing repository.",
+  "version": "1.0.0",
+  "publisher": "deepmind",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:aiContextBuilder.generateFromFile",
+    "onCommand:aiContextBuilder.generateFromSymbol",
+    "onCommand:aiContextBuilder.generateWithOptions",
+    "onCommand:aiContextBuilder.generateAndCopy",
+    "onCommand:aiContextBuilder.generateAndSave",
+    "onCommand:aiContextBuilder.openLastGenerated",
+    "onCommand:aiContextBuilder.showDependencyPreview",
+    "onCommand:aiContextBuilder.showOutputLog",
+    "onCommand:aiContextBuilder.checkWorkers"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiContextBuilder.generateFromFile",
+        "title": "AI Context: Generate from Current File",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.generateFromSymbol",
+        "title": "AI Context: Generate from Symbol at Cursor",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.generateWithOptions",
+        "title": "AI Context: Generate with Options",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.generateAndCopy",
+        "title": "AI Context: Generate and Copy to Clipboard",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.generateAndSave",
+        "title": "AI Context: Generate and Save",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.openLastGenerated",
+        "title": "AI Context: Open Last Generated Context",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.showDependencyPreview",
+        "title": "AI Context: Show Dependency Preview",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.showOutputLog",
+        "title": "AI Context: Show Output Log",
+        "category": "AI Context"
+      },
+      {
+        "command": "aiContextBuilder.checkWorkers",
+        "title": "AI Context: Check Language Workers",
+        "category": "AI Context"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "aiContextBuilder.generateFromFile",
+          "group": "aiContext@1",
+          "title": "Generate AI Context"
+        },
+        {
+          "command": "aiContextBuilder.generateWithOptions",
+          "group": "aiContext@2",
+          "title": "Generate AI Context with Options..."
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "aiContextBuilder.generateFromFile",
+          "group": "aiContext@1",
+          "title": "Generate AI Context"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Context Builder",
+      "properties": {
+        "aiContextBuilder.executablePath": {
+          "type": "string",
+          "default": "aicontext",
+          "description": "Path to the aicontext executable binary or wrapper."
+        },
+        "aiContextBuilder.outputDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Optional default directory to write generated context Markdown files."
+        },
+        "aiContextBuilder.defaultLanguage": {
+          "type": "string",
+          "default": "Auto",
+          "enum": ["Auto", "CSharp", "VisualBasic", "TypeScript", "JavaScript", "JSX", "TSX", "HTML", "CSS", "SCSS", "Sass", "Java", "Python", "Go", "Razor", "Vue"],
+          "description": "Default language filter for analysis."
+        },
+        "aiContextBuilder.defaultFramework": {
+          "type": "string",
+          "default": "Auto",
+          "enum": ["Auto", "None", "AspNetCore", "RazorPages", "Blazor", "Node", "React", "Angular", "Vue"],
+          "description": "Default framework adapter to apply."
+        },
+        "aiContextBuilder.defaultAnalysisLevel": {
+          "type": "string",
+          "default": "Best",
+          "enum": ["Best", "Semantic", "SyntaxAware", "ImportGraph"],
+          "description": "Default analysis capability level."
+        },
+        "aiContextBuilder.defaultTokenBudget": {
+          "type": ["number", "null"],
+          "default": null,
+          "description": "Default token budget for output document (null means unlimited)."
+        },
+        "aiContextBuilder.defaultMaxDepth": {
+          "type": ["number", "null"],
+          "default": null,
+          "description": "Default maximum traversal depth (null means unlimited)."
+        },
+        "aiContextBuilder.commentMode": {
+          "type": "string",
+          "default": "Preserve",
+          "enum": ["Preserve", "Remove", "Auto"],
+          "description": "Default comment handling policy."
+        },
+        "aiContextBuilder.includeTests": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include test files by default."
+        },
+        "aiContextBuilder.includeGeneratedFiles": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include compiler or code-generated files."
+        },
+        "aiContextBuilder.includeAttributes": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include attribute/decorator dependencies."
+        },
+        "aiContextBuilder.includeImplementations": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include concrete implementations of interfaces."
+        },
+        "aiContextBuilder.includeCompanionFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include framework companion templates and stylesheets."
+        },
+        "aiContextBuilder.includeAssets": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include referenced binary assets."
+        },
+        "aiContextBuilder.includeConfigurationFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include configuration files (tsconfig, package.json, etc.)."
+        },
+        "aiContextBuilder.saveToFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Save generated markdown to file."
+        },
+        "aiContextBuilder.copyToClipboard": {
+          "type": "boolean",
+          "default": false,
+          "description": "Copy generated markdown to clipboard."
+        },
+        "aiContextBuilder.openAfterGeneration": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically open the generated markdown file in editor."
+        },
+        "aiContextBuilder.tokenizer": {
+          "type": "string",
+          "default": "approximate",
+          "description": "Token estimator name."
+        },
+        "aiContextBuilder.verboseLogging": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose diagnostic logs."
+        }
+      }
+    }
+  }
+}
