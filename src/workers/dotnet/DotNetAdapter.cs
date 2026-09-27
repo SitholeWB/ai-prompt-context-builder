@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AiContextBuilder.Core.Protocol;
-using AiContextBuilder.Core.Workers;
+using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Workers;
 
-namespace AiContextBuilder.Workers.DotNet;
+namespace AiPromptContextBuilder.Workers.DotNet;
 
 public class DotNetAdapter : ILanguageAdapter
 {

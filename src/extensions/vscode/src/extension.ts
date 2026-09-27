@@ -7,199 +7,195 @@ let lastGeneratedPath: string | null = null;
 let outputChannel: vscode.OutputChannel;
 
 export function activate(context: vscode.ExtensionContext) {
-  outputChannel = vscode.window.createOutputChannel('AI Context Builder');
+  outputChannel = vscode.window.createOutputChannel('AI Context & Prompt Builder');
   context.subscriptions.push(outputChannel);
 
+  const registerCmd = (name: string, handler: (...args: any[]) => any) => {
+    context.subscriptions.push(vscode.commands.registerCommand(`aiPromptContextBuilder.${name}`, handler));
+    // Register backwards-compatible alias
+    context.subscriptions.push(vscode.commands.registerCommand(`aiContextBuilder.${name}`, handler));
+  };
+
   // 1. Generate from Current File
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.generateFromFile', async (uri?: vscode.Uri) => {
-      const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
-      if (!filePath) {
-        vscode.window.showErrorMessage('No active file selected to generate AI context.');
-        return;
-      }
-      await runGeneration(filePath, {});
-    })
-  );
+  registerCmd('generateFromFile', async (uri?: vscode.Uri) => {
+    const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
+    if (!filePath) {
+      vscode.window.showErrorMessage('No active file selected to generate AI context.');
+      return;
+    }
+    await runGeneration(filePath, {});
+  });
 
   // 2. Generate from Symbol at Cursor
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.generateFromSymbol', async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showErrorMessage('No active editor open.');
-        return;
-      }
-      const filePath = editor.document.uri.fsPath;
-      const selection = editor.selection;
-      let symbol = editor.document.getText(selection).trim();
+  registerCmd('generateFromSymbol', async () => {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      vscode.window.showErrorMessage('No active editor open.');
+      return;
+    }
+    const filePath = editor.document.uri.fsPath;
+    const selection = editor.selection;
+    let symbol = editor.document.getText(selection).trim();
 
-      if (!symbol) {
-        const wordRange = editor.document.getWordRangeAtPosition(selection.active);
-        if (wordRange) {
-          symbol = editor.document.getText(wordRange).trim();
-        }
+    if (!symbol) {
+      const wordRange = editor.document.getWordRangeAtPosition(selection.active);
+      if (wordRange) {
+        symbol = editor.document.getText(wordRange).trim();
       }
+    }
 
-      if (!symbol) {
-        vscode.window.showErrorMessage('No symbol found at cursor position.');
-        return;
-      }
+    if (!symbol) {
+      vscode.window.showErrorMessage('No symbol found at cursor position.');
+      return;
+    }
 
-      await runGeneration(filePath, { symbol });
-    })
-  );
+    await runGeneration(filePath, { symbol });
+  });
 
   // 3. Generate with Options
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.generateWithOptions', async (uri?: vscode.Uri) => {
-      const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
-      if (!filePath) {
-        vscode.window.showErrorMessage('No active file selected.');
-        return;
+  registerCmd('generateWithOptions', async (uri?: vscode.Uri) => {
+    const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
+    if (!filePath) {
+      vscode.window.showErrorMessage('No active file selected.');
+      return;
+    }
+
+    // Prompt for Token Budget
+    const budgetPick = await vscode.window.showQuickPick(
+      [
+        { label: 'Unlimited', description: 'Include all eligible transitive dependencies' },
+        { label: '32,000', description: '32k token budget' },
+        { label: '64,000', description: '64k token budget' },
+        { label: '100,000', description: '100k token budget' },
+        { label: '128,000', description: '128k token budget' },
+        { label: '200,000', description: '200k token budget' },
+        { label: 'Custom', description: 'Enter specific integer token budget' },
+      ],
+      { title: 'Select Token Budget' }
+    );
+    if (!budgetPick) return;
+
+    let maxTokens: number | undefined;
+    if (budgetPick.label === 'Custom') {
+      const customVal = await vscode.window.showInputBox({ prompt: 'Enter token budget (e.g. 50000)' });
+      if (customVal && parseInt(customVal, 10)) {
+        maxTokens = parseInt(customVal, 10);
       }
+    } else if (budgetPick.label !== 'Unlimited') {
+      maxTokens = parseInt(budgetPick.label.replace(',', ''), 10);
+    }
 
-      // Prompt for Token Budget
-      const budgetPick = await vscode.window.showQuickPick(
-        [
-          { label: 'Unlimited', description: 'Include all eligible transitive dependencies' },
-          { label: '32,000', description: '32k token budget' },
-          { label: '64,000', description: '64k token budget' },
-          { label: '100,000', description: '100k token budget' },
-          { label: '128,000', description: '128k token budget' },
-          { label: '200,000', description: '200k token budget' },
-          { label: 'Custom', description: 'Enter specific integer token budget' },
-        ],
-        { title: 'Select Token Budget' }
-      );
-      if (!budgetPick) return;
+    // Prompt for Comment Mode
+    const commentPick = await vscode.window.showQuickPick(
+      [
+        { label: 'Preserve', description: 'Retain original comments' },
+        { label: 'Auto', description: 'Remove comments only if token budget is exceeded' },
+        { label: 'Remove', description: 'Remove comments' },
+      ],
+      { title: 'Select Comment Mode' }
+    );
+    if (!commentPick) return;
 
-      let maxTokens: number | undefined;
-      if (budgetPick.label === 'Custom') {
-        const customVal = await vscode.window.showInputBox({ prompt: 'Enter token budget (e.g. 50000)' });
-        if (customVal && parseInt(customVal, 10)) {
-          maxTokens = parseInt(customVal, 10);
-        }
-      } else if (budgetPick.label !== 'Unlimited') {
-        maxTokens = parseInt(budgetPick.label.replace(',', ''), 10);
-      }
+    // Prompt for Max Depth
+    const depthPick = await vscode.window.showQuickPick(
+      [
+        { label: 'Unlimited', description: 'Traverse full transitive dependency tree' },
+        { label: '1', description: 'Direct dependencies only' },
+        { label: '2', description: 'Depth 2' },
+        { label: '3', description: 'Depth 3' },
+        { label: '5', description: 'Depth 5' },
+        { label: 'Custom', description: 'Enter custom integer depth' },
+      ],
+      { title: 'Select Maximum Traversal Depth' }
+    );
+    if (!depthPick) return;
 
-      // Prompt for Comment Mode
-      const commentPick = await vscode.window.showQuickPick(
-        [
-          { label: 'Preserve', description: 'Retain original comments' },
-          { label: 'Auto', description: 'Remove comments only if token budget is exceeded' },
-          { label: 'Remove', description: 'Remove comments' },
-        ],
-        { title: 'Select Comment Mode' }
-      );
-      if (!commentPick) return;
+    let maxDepth: number | undefined;
+    if (depthPick.label === 'Custom') {
+      const val = await vscode.window.showInputBox({ prompt: 'Enter max traversal depth (integer)' });
+      if (val && parseInt(val, 10)) maxDepth = parseInt(val, 10);
+    } else if (depthPick.label !== 'Unlimited') {
+      maxDepth = parseInt(depthPick.label, 10);
+    }
 
-      // Prompt for Max Depth
-      const depthPick = await vscode.window.showQuickPick(
-        [
-          { label: 'Unlimited', description: 'Traverse full transitive dependency tree' },
-          { label: '1', description: 'Direct dependencies only' },
-          { label: '2', description: 'Depth 2' },
-          { label: '3', description: 'Depth 3' },
-          { label: '5', description: 'Depth 5' },
-          { label: 'Custom', description: 'Enter custom integer depth' },
-        ],
-        { title: 'Select Maximum Traversal Depth' }
-      );
-      if (!depthPick) return;
+    // Prompt for Optional Task
+    const taskInput = await vscode.window.showInputBox({
+      prompt: 'Optional: Enter custom refactoring or analysis task for the Markdown prompt',
+      placeHolder: 'e.g. Refactor service to use asynchronous repository calls'
+    });
 
-      let maxDepth: number | undefined;
-      if (depthPick.label === 'Custom') {
-        const val = await vscode.window.showInputBox({ prompt: 'Enter max traversal depth (integer)' });
-        if (val && parseInt(val, 10)) maxDepth = parseInt(val, 10);
-      } else if (depthPick.label !== 'Unlimited') {
-        maxDepth = parseInt(depthPick.label, 10);
-      }
-
-      // Prompt for Optional Task
-      const taskInput = await vscode.window.showInputBox({
-        prompt: 'Optional: Enter custom refactoring or analysis task for the Markdown prompt',
-        placeHolder: 'e.g. Refactor service to use asynchronous repository calls'
-      });
-
-      await runGeneration(filePath, {
-        maxTokens,
-        commentMode: commentPick.label,
-        maxDepth,
-        task: taskInput,
-      });
-    })
-  );
+    await runGeneration(filePath, {
+      maxTokens,
+      commentMode: commentPick.label,
+      maxDepth,
+      task: taskInput,
+    });
+  });
 
   // 4. Generate and Copy
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.generateAndCopy', async () => {
-      const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
-      if (!filePath) return;
-      await runGeneration(filePath, { copyToClipboard: true });
-    })
-  );
+  registerCmd('generateAndCopy', async () => {
+    const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+    if (!filePath) return;
+    await runGeneration(filePath, { copyToClipboard: true });
+  });
 
   // 5. Generate and Save
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.generateAndSave', async () => {
-      const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
-      if (!filePath) return;
-      await runGeneration(filePath, { saveToFile: true });
-    })
-  );
+  registerCmd('generateAndSave', async () => {
+    const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+    if (!filePath) return;
+    await runGeneration(filePath, { saveToFile: true });
+  });
 
   // 6. Open Last Generated
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.openLastGenerated', async () => {
-      if (lastGeneratedPath && fs.existsSync(lastGeneratedPath)) {
-        const doc = await vscode.workspace.openTextDocument(lastGeneratedPath);
-        await vscode.window.showTextDocument(doc);
-      } else {
-        vscode.window.showInformationMessage('No generated context file found.');
-      }
-    })
-  );
+  registerCmd('openLastGenerated', async () => {
+    if (lastGeneratedPath && fs.existsSync(lastGeneratedPath)) {
+      const doc = await vscode.workspace.openTextDocument(lastGeneratedPath);
+      await vscode.window.showTextDocument(doc);
+    } else {
+      vscode.window.showInformationMessage('No generated prompt context file found.');
+    }
+  });
 
   // 7. Show Dependency Preview
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.showDependencyPreview', async () => {
-      if (lastGeneratedPath && fs.existsSync(lastGeneratedPath)) {
-        const content = fs.readFileSync(lastGeneratedPath, 'utf8');
-        const treeMatch = content.match(/## Dependency Tree\s+```text([\s\S]*?)```/);
-        if (treeMatch) {
-          vscode.window.showInformationMessage(treeMatch[1].trim());
-        }
+  registerCmd('showDependencyPreview', async () => {
+    if (lastGeneratedPath && fs.existsSync(lastGeneratedPath)) {
+      const content = fs.readFileSync(lastGeneratedPath, 'utf8');
+      const treeMatch = content.match(/## Dependency Tree\s+```text([\s\S]*?)```/);
+      if (treeMatch) {
+        vscode.window.showInformationMessage(treeMatch[1].trim());
       }
-    })
-  );
+    }
+  });
 
   // 8. Show Output Log
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.showOutputLog', () => {
-      outputChannel.show();
-    })
-  );
+  registerCmd('showOutputLog', () => {
+    outputChannel.show();
+  });
 
   // 9. Check Language Workers
-  context.subscriptions.push(
-    vscode.commands.registerCommand('aiContextBuilder.checkWorkers', async () => {
-      const config = vscode.workspace.getConfiguration('aiContextBuilder');
-      const exe = config.get<string>('executablePath') || 'aicontext';
+  registerCmd('checkWorkers', async () => {
+    const config = getConfiguration();
+    const exe = config.get<string>('executablePath') || 'aiprompt';
 
-      outputChannel.appendLine(`Checking workers using '${exe}'...`);
-      const proc = spawn(exe, ['check-workers']);
+    outputChannel.appendLine(`Checking workers using '${exe}'...`);
+    const proc = spawn(exe, ['check-workers']);
 
-      let output = '';
-      proc.stdout.on('data', (d) => { output += d.toString(); });
-      proc.on('close', (code) => {
-        outputChannel.appendLine(output);
-        outputChannel.show();
-        vscode.window.showInformationMessage(`Language workers verified (exit code: ${code}). See output log.`);
-      });
-    })
-  );
+    let output = '';
+    proc.stdout.on('data', (d) => { output += d.toString(); });
+    proc.on('close', (code) => {
+      outputChannel.appendLine(output);
+      outputChannel.show();
+      vscode.window.showInformationMessage(`Language workers verified (exit code: ${code}). See output log.`);
+    });
+  });
+}
+
+function getConfiguration(): vscode.WorkspaceConfiguration {
+  const primary = vscode.workspace.getConfiguration('aiPromptContextBuilder');
+  if (primary.has('executablePath')) {
+    return primary;
+  }
+  return vscode.workspace.getConfiguration('aiContextBuilder');
 }
 
 interface RunOptions {
@@ -213,15 +209,18 @@ interface RunOptions {
 }
 
 async function runGeneration(filePath: string, options: RunOptions) {
-  const config = vscode.workspace.getConfiguration('aiContextBuilder');
-  const configuredExe = config.get<string>('executablePath') || 'aicontext';
+  const config = getConfiguration();
+  const configuredExe = config.get<string>('executablePath') || 'aiprompt';
 
   // Resolve executable path
   let exePath = configuredExe;
   if (!path.isAbsolute(exePath)) {
-    const localShim = '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aicontext';
-    if (fs.existsSync(localShim)) {
-      exePath = localShim;
+    const localShimPrompt = '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aiprompt';
+    const localShimContext = '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aicontext';
+    if (fs.existsSync(localShimPrompt)) {
+      exePath = localShimPrompt;
+    } else if (fs.existsSync(localShimContext)) {
+      exePath = localShimContext;
     }
   }
 
@@ -242,7 +241,7 @@ async function runGeneration(filePath: string, options: RunOptions) {
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Generating AI Context...',
+      title: 'Generating AI Prompt & Context...',
       cancellable: true,
     },
     async (progress, token) => {
@@ -268,7 +267,7 @@ async function runGeneration(filePath: string, options: RunOptions) {
       token.onCancellationRequested(() => {
         child.kill();
         clearInterval(interval);
-        outputChannel.appendLine('Context generation cancelled by user.');
+        outputChannel.appendLine('Prompt generation cancelled by user.');
       });
 
       let stdout = '';
@@ -289,15 +288,15 @@ async function runGeneration(filePath: string, options: RunOptions) {
                 handleSuccess(res);
                 resolve();
               } else {
-                vscode.window.showErrorMessage(`Context Generation Failed: ${res.message || 'Unknown error'}`);
+                vscode.window.showErrorMessage(`Prompt Generation Failed: ${res.message || 'Unknown error'}`);
                 reject(new Error(res.message));
               }
             } catch (e: any) {
-              vscode.window.showErrorMessage(`Failed to parse result from aicontext: ${e.message}`);
+              vscode.window.showErrorMessage(`Failed to parse result from aiprompt: ${e.message}`);
               reject(e);
             }
           } else {
-            vscode.window.showErrorMessage(`aicontext exited with code ${code}. Error: ${stderr}`);
+            vscode.window.showErrorMessage(`aiprompt exited with code ${code}. Error: ${stderr}`);
             reject(new Error(`Exit code ${code}`));
           }
         });

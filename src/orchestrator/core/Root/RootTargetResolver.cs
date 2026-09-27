@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Root;
+namespace AiPromptContextBuilder.Core.Root;
 
 public class RootSelectionResult
 {

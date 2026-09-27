@@ -25,7 +25,7 @@ The test suite is self-contained and exercises all 13 core domains:
 From the repository root:
 
 ```bash
-dotnet run --project tests/AiContextBuilder.Tests.csproj
+dotnet run --project tests/AiPromptContextBuilder.Tests.csproj
 ```
 
 Expected output:
@@ -66,9 +66,9 @@ The repository includes a ready-to-use `.vscode/launch.json`:
 
 ### 2.2 Using Visual Studio 2022
 
-1. Open `AiContextBuilder.slnx` in Visual Studio 2022.
-2. Right-click `AiContextBuilder.Cli` in Solution Explorer -> **Set as Startup Project**.
-3. Right-click `AiContextBuilder.Cli` -> **Properties** -> **Debug** -> **General** -> **Open debug launch profiles UI**.
+1. Open `AiPromptContextBuilder.slnx` in Visual Studio 2022.
+2. Right-click `AiPromptContextBuilder.Cli` in Solution Explorer -> **Set as Startup Project**.
+3. Right-click `AiPromptContextBuilder.Cli` -> **Properties** -> **Debug** -> **General** -> **Open debug launch profiles UI**.
 4. Set Command Line Arguments:
    ```text
    generate --file tests/fixtures/dotnet/CustomerService.cs --verbose
@@ -133,7 +133,7 @@ Add `import pdb; pdb.set_trace()` inside `worker.py` in the `analyze()` function
 
 ---
 
-### 3.3 .NET Roslyn Worker (`AiContextBuilder.Workers.DotNet`)
+### 3.3 .NET Roslyn Worker (`AiPromptContextBuilder.Workers.DotNet`)
 
 The .NET worker runs in-process with the orchestrator. You can set breakpoints inside:
 - `DotNetAnalyzer.cs`:

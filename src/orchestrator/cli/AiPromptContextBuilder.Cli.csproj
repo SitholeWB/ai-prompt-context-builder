@@ -6,12 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>aicontext</AssemblyName>
+    <AssemblyName>aiprompt</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\core\AiContextBuilder.Core.csproj" />
-    <ProjectReference Include="..\..\workers\dotnet\AiContextBuilder.Workers.DotNet.csproj" />
+    <ProjectReference Include="..\core\AiPromptContextBuilder.Core.csproj" />
+    <ProjectReference Include="..\..\workers\dotnet\AiPromptContextBuilder.Workers.DotNet.csproj" />
   </ItemGroup>
 
 </Project>

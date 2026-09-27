@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Security;
+namespace AiPromptContextBuilder.Core.Security;
 
 public class SecretPattern
 {

@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\orchestrator\core\AiContextBuilder.Core.csproj" />
+    <ProjectReference Include="..\..\orchestrator\core\AiPromptContextBuilder.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

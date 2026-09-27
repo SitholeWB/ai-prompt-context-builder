@@ -4,19 +4,19 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using AiContextBuilder.Core.Budget;
-using AiContextBuilder.Core.Filters;
-using AiContextBuilder.Core.Graph;
-using AiContextBuilder.Core.Markdown;
-using AiContextBuilder.Core.Protocol;
-using AiContextBuilder.Core.Root;
-using AiContextBuilder.Core.Scoring;
-using AiContextBuilder.Core.Security;
-using AiContextBuilder.Core.Tokenizer;
-using AiContextBuilder.Core.Workers;
-using AiContextBuilder.Core.Workspace;
+using AiPromptContextBuilder.Core.Budget;
+using AiPromptContextBuilder.Core.Filters;
+using AiPromptContextBuilder.Core.Graph;
+using AiPromptContextBuilder.Core.Markdown;
+using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Root;
+using AiPromptContextBuilder.Core.Scoring;
+using AiPromptContextBuilder.Core.Security;
+using AiPromptContextBuilder.Core.Tokenizer;
+using AiPromptContextBuilder.Core.Workers;
+using AiPromptContextBuilder.Core.Workspace;
 
-namespace AiContextBuilder.Core;
+namespace AiPromptContextBuilder.Core;
 
 public class OrchestrationResult
 {

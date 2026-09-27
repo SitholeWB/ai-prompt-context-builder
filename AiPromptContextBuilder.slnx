@@ -2,16 +2,16 @@
   <Folder Name="/src/" />
   <Folder Name="/src/orchestrator/" />
   <Folder Name="/src/orchestrator/cli/">
-    <Project Path="src/orchestrator/cli/AiContextBuilder.Cli.csproj" />
+    <Project Path="src/orchestrator/cli/AiPromptContextBuilder.Cli.csproj" />
   </Folder>
   <Folder Name="/src/orchestrator/core/">
-    <Project Path="src/orchestrator/core/AiContextBuilder.Core.csproj" />
+    <Project Path="src/orchestrator/core/AiPromptContextBuilder.Core.csproj" />
   </Folder>
   <Folder Name="/src/workers/" />
   <Folder Name="/src/workers/dotnet/">
-    <Project Path="src/workers/dotnet/AiContextBuilder.Workers.DotNet.csproj" />
+    <Project Path="src/workers/dotnet/AiPromptContextBuilder.Workers.DotNet.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/AiContextBuilder.Tests.csproj" />
+    <Project Path="tests/AiPromptContextBuilder.Tests.csproj" />
   </Folder>
 </Solution>

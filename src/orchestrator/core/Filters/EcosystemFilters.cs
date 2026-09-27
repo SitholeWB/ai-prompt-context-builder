@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Filters;
+namespace AiPromptContextBuilder.Core.Filters;
 
 public class FilterEvaluation
 {

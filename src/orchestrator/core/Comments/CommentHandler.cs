@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Comments;
+namespace AiPromptContextBuilder.Core.Comments;
 
 public class CommentRemovalResult
 {

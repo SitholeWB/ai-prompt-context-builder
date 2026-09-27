@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
-using AiContextBuilder.Core.Budget;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Budget;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Markdown;
+namespace AiPromptContextBuilder.Core.Markdown;
 
 public class MarkdownGenerationMetadata
 {

@@ -4,7 +4,7 @@
 
 **Generate portable, dependency-aware, AI-ready prompts and code context from any repository.**
 
-[![CI](https://github.com/aicontext/ai-context-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/aicontext/ai-context-builder/actions)
+[![CI](https://github.com/SitholeWB/ai-prompt-context-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/SitholeWB/ai-prompt-context-builder/actions)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![C#](https://img.shields.io/badge/C%23-12.0-239120?logo=csharp)](https://learn.microsoft.com/en-us/dotnet/csharp/)
 [![Roslyn](https://img.shields.io/badge/Roslyn-Semantic_Compiler_API-blue)](https://github.com/dotnet/roslyn)
@@ -186,14 +186,14 @@ Generate clean, dependency-aware AI prompts directly inside your editor with sin
 
 | Command | Title | Action |
 | :--- | :--- | :--- |
-| `aiContextBuilder.generateFromFile` | **AI Prompt: Generate from Current File** | Analyzes the active file and all transitive dependencies |
-| `aiContextBuilder.generateFromSymbol`| **AI Prompt: Generate from Symbol at Cursor**| Centers analysis on the selected class/function symbol |
-| `aiContextBuilder.generateWithOptions`| **AI Prompt: Generate with Options...** | Opens interactive wizard for budget, depth, and comment policy |
-| `aiContextBuilder.generateAndCopy` | **AI Prompt: Generate and Copy to Clipboard** | Generates prompt and copies directly to clipboard |
-| `aiContextBuilder.generateAndSave` | **AI Prompt: Generate and Save to File** | Generates and saves directly to disk |
-| `aiContextBuilder.openLastGenerated`| **AI Prompt: Open Last Generated Prompt** | Re-opens the most recent context prompt in the editor |
-| `aiContextBuilder.showDependencyPreview` | **AI Context: Show Dependency Preview** | Displays an ASCII tree notification of discovered dependencies |
-| `aiContextBuilder.checkWorkers` | **AI Context: Check Language Workers** | Verifies compiler health across .NET Roslyn, Node.js, and Python |
+| `aiPromptContextBuilder.generateFromFile` | **AI Prompt: Generate from Current File** | Analyzes the active file and all transitive dependencies |
+| `aiPromptContextBuilder.generateFromSymbol`| **AI Prompt: Generate from Symbol at Cursor**| Centers analysis on the selected class/function symbol |
+| `aiPromptContextBuilder.generateWithOptions`| **AI Prompt: Generate with Options...** | Opens interactive wizard for budget, depth, and comment policy |
+| `aiPromptContextBuilder.generateAndCopy` | **AI Prompt: Generate and Copy to Clipboard** | Generates prompt and copies directly to clipboard |
+| `aiPromptContextBuilder.generateAndSave` | **AI Prompt: Generate and Save to File** | Generates and saves directly to disk |
+| `aiPromptContextBuilder.openLastGenerated`| **AI Prompt: Open Last Generated Prompt** | Re-opens the most recent context prompt in the editor |
+| `aiPromptContextBuilder.showDependencyPreview` | **AI Context: Show Dependency Preview** | Displays an ASCII tree notification of discovered dependencies |
+| `aiPromptContextBuilder.checkWorkers` | **AI Context: Check Language Workers** | Verifies compiler health across .NET Roslyn, Node.js, and Python |
 
 ---
 
@@ -216,19 +216,19 @@ The VS Code Marketplace and GitHub READMEs support animated `.gif` files nativel
 
 ---
 
-### Extension Settings (`aiContextBuilder.*`)
+### Extension Settings (`aiPromptContextBuilder.*`)
 
 Customize default behavior in **Settings** (`Ctrl+,` -> search `aiContextBuilder`):
 
 ```json
 {
-  "aiContextBuilder.executablePath": "aicontext",
-  "aiContextBuilder.defaultTokenBudget": null,
-  "aiContextBuilder.commentMode": "Preserve",
-  "aiContextBuilder.includeCompanionFiles": true,
-  "aiContextBuilder.includeTests": false,
-  "aiContextBuilder.includeGeneratedFiles": false,
-  "aiContextBuilder.openAfterGeneration": true
+  "aiPromptContextBuilder.executablePath": "aicontext",
+  "aiPromptContextBuilder.defaultTokenBudget": null,
+  "aiPromptContextBuilder.commentMode": "Preserve",
+  "aiPromptContextBuilder.includeCompanionFiles": true,
+  "aiPromptContextBuilder.includeTests": false,
+  "aiPromptContextBuilder.includeGeneratedFiles": false,
+  "aiPromptContextBuilder.openAfterGeneration": true
 }
 ```
 
@@ -245,7 +245,7 @@ Customize default behavior in **Settings** (`Ctrl+,` -> search `aiContextBuilder
 ## 🧪 Testing & Debugging
 
 The repository features comprehensive automated acceptance tests and step-by-step developer debugging tools:
-- **Run Acceptance Tests**: `dotnet run --project tests/AiContextBuilder.Tests.csproj`
+- **Run Acceptance Tests**: `dotnet run --project tests/AiPromptContextBuilder.Tests.csproj`
 - **VS Code F5 Debugging**: Pre-configured `.vscode/launch.json` for stepping through CLI execution and tests.
 - **Detailed Guide**: See [`docs/testing-and-debugging.md`](docs/testing-and-debugging.md) for worker pipe debugging, AST inspection, and golden-file regression workflows.
 

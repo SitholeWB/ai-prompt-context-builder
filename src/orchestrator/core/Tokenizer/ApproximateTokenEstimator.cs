@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace AiContextBuilder.Core.Tokenizer;
+namespace AiPromptContextBuilder.Core.Tokenizer;
 
 public class TokenEstimationResult
 {

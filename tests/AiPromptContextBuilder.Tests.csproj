@@ -14,8 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\orchestrator\core\AiContextBuilder.Core.csproj" />
-    <ProjectReference Include="..\src\workers\dotnet\AiContextBuilder.Workers.DotNet.csproj" />
+    <ProjectReference Include="..\src\orchestrator\core\AiPromptContextBuilder.Core.csproj" />
+    <ProjectReference Include="..\src\workers\dotnet\AiPromptContextBuilder.Workers.DotNet.csproj" />
   </ItemGroup>
 
   <ItemGroup>

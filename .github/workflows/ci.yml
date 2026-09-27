@@ -36,7 +36,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build Solution
-        run: dotnet build AiContextBuilder.slnx -c Release
+        run: dotnet build AiPromptContextBuilder.slnx -c Release
 
       - name: Run Acceptance Tests
-        run: dotnet run --project tests/AiContextBuilder.Tests.csproj -c Release
+        run: dotnet run --project tests/AiPromptContextBuilder.Tests.csproj -c Release

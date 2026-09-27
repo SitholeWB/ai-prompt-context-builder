@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using AiContextBuilder.Core.Comments;
-using AiContextBuilder.Core.Graph;
-using AiContextBuilder.Core.Protocol;
-using AiContextBuilder.Core.Tokenizer;
+using AiPromptContextBuilder.Core.Comments;
+using AiPromptContextBuilder.Core.Graph;
+using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Tokenizer;
 
-namespace AiContextBuilder.Core.Budget;
+namespace AiPromptContextBuilder.Core.Budget;
 
 public class EvaluatedFile
 {

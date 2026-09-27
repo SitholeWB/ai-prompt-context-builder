@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Workers;
+namespace AiPromptContextBuilder.Core.Workers;
 
 public interface ILanguageAdapter
 {

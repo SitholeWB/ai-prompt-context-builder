@@ -5,11 +5,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using AiContextBuilder.Core.Protocol;
-using ProtocolDiagnostic = AiContextBuilder.Core.Protocol.Diagnostic;
-using ProtocolSeverity = AiContextBuilder.Core.Protocol.DiagnosticSeverity;
+using AiPromptContextBuilder.Core.Protocol;
+using ProtocolDiagnostic = AiPromptContextBuilder.Core.Protocol.Diagnostic;
+using ProtocolSeverity = AiPromptContextBuilder.Core.Protocol.DiagnosticSeverity;
 
-namespace AiContextBuilder.Workers.DotNet;
+namespace AiPromptContextBuilder.Workers.DotNet;
 
 public class DotNetAnalyzer
 {

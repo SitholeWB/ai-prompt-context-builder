@@ -2,18 +2,18 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AiContextBuilder.Core;
-using AiContextBuilder.Core.Budget;
-using AiContextBuilder.Core.Comments;
-using AiContextBuilder.Core.Graph;
-using AiContextBuilder.Core.Markdown;
-using AiContextBuilder.Core.Protocol;
-using AiContextBuilder.Core.Scoring;
-using AiContextBuilder.Core.Security;
-using AiContextBuilder.Core.Tokenizer;
-using AiContextBuilder.Workers.DotNet;
+using AiPromptContextBuilder.Core;
+using AiPromptContextBuilder.Core.Budget;
+using AiPromptContextBuilder.Core.Comments;
+using AiPromptContextBuilder.Core.Graph;
+using AiPromptContextBuilder.Core.Markdown;
+using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Scoring;
+using AiPromptContextBuilder.Core.Security;
+using AiPromptContextBuilder.Core.Tokenizer;
+using AiPromptContextBuilder.Workers.DotNet;
 
-namespace AiContextBuilder.Tests;
+namespace AiPromptContextBuilder.Tests;
 
 public class Program
 {
@@ -23,7 +23,7 @@ public class Program
     public static async Task<int> Main()
     {
         Console.WriteLine("=================================================");
-        Console.WriteLine(" AI Context Builder - Automated Acceptance Tests ");
+        Console.WriteLine(" AI Prompt & Context Builder - Automated Tests    ");
         Console.WriteLine("=================================================");
 
         RunTest("1. Neutral Graph: Multi-Edges, Cycles, Tree Rendering", TestNeutralGraph);

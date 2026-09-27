@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace AiContextBuilder.Core.Protocol;
+namespace AiPromptContextBuilder.Core.Protocol;
 
 public enum CapabilityLevel
 {

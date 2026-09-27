@@ -4,12 +4,12 @@
 
 This document specifies the integration architecture for extending **AI Context Builder** into a native **Visual Studio 2022+ extension** (`.vsix`). 
 
-Because the orchestrator and .NET worker are built with .NET and Roslyn, Visual Studio integration can directly reuse `AiContextBuilder.Core` as a referenced library without IPC or child-process overhead.
+Because the orchestrator and .NET worker are built with .NET and Roslyn, Visual Studio integration can directly reuse `AiPromptContextBuilder.Core` as a referenced library without IPC or child-process overhead.
 
 ## 2. Core Architectural Principles for Visual Studio
 
 1. **Keep Shared Libraries Free of Visual Studio SDK**:
-   `AiContextBuilder.Core` must remain pure .NET Standard / .NET 8 / .NET 10 without any dependencies on `Microsoft.VisualStudio.Shell.*`.
+   `AiPromptContextBuilder.Core` must remain pure .NET Standard / .NET 8 / .NET 10 without any dependencies on `Microsoft.VisualStudio.Shell.*`.
 2. **Reuse In-Process Roslyn Workspace**:
    Instead of parsing disk files from scratch, the Visual Studio extension passes the active `VisualStudioWorkspace` and `EnvDTE.Document` directly to `DotNetAnalyzer`.
 3. **Handle Unsaved Memory Buffers**:
@@ -53,4 +53,4 @@ Because the orchestrator and .NET worker are built with .NET and Roslyn, Visual 
 
 ## 4. Packaging and Deployment
 - Packaged as a standard `.vsix` targeting Visual Studio 2022 (v17.0+).
-- Bundles `AiContextBuilder.Core.dll` and dependencies in the VSIX container.
+- Bundles `AiPromptContextBuilder.Core.dll` and dependencies in the VSIX container.

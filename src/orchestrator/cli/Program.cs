@@ -3,11 +3,11 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using AiContextBuilder.Core;
-using AiContextBuilder.Core.Protocol;
-using AiContextBuilder.Workers.DotNet;
+using AiPromptContextBuilder.Core;
+using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Workers.DotNet;
 
-namespace AiContextBuilder.Cli;
+namespace AiPromptContextBuilder.Cli;
 
 public class Program
 {
@@ -28,7 +28,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aicontext version 1.0.0");
+            Console.WriteLine("aiprompt (aicontext) version 1.0.0");
             return 0;
         }
 
@@ -190,7 +190,7 @@ public class Program
 
         if (format == "text")
         {
-            Console.Error.WriteLine($"[aicontext] Analyzing source: {config.RootPath}...");
+            Console.Error.WriteLine($"[aiprompt] Analyzing source: {config.RootPath}...");
         }
 
         var orchestrator = new ContextOrchestrator();
@@ -277,12 +277,13 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Context Builder (aicontext) - Version 1.0.0
-Generates portable, dependency-aware, AI-ready source context from an existing repository.
+        Console.WriteLine(@"AI Prompt & Context Builder (aiprompt / aicontext) - Version 1.0.0
+Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
-  aicontext generate --file <path> [options]
-  aicontext check-workers
+  aiprompt generate --file <path> [options]
+  aiprompt check-workers
+  (or aicontext generate / aicontext check-workers)
 
 Required:
   --file <path>                  Target source file to analyze

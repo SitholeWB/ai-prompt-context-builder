@@ -1,6 +1,6 @@
 {
-  "name": "ai-context-builder",
-  "displayName": "AI Context Builder",
+  "name": "ai-prompt-context-builder",
+  "displayName": "AI Context Builder & Prompt Generator",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
   "version": "1.0.0",
   "publisher": "sitholewb",
@@ -11,7 +11,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SitholeWB/ai-context-builder.git"
+    "url": "https://github.com/SitholeWB/ai-prompt-context-builder.git"
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -53,61 +53,64 @@
     "python"
   ],
   "activationEvents": [
+    "onCommand:aiPromptContextBuilder.generateFromFile",
+    "onCommand:aiPromptContextBuilder.generateFromSymbol",
+    "onCommand:aiPromptContextBuilder.generateWithOptions",
+    "onCommand:aiPromptContextBuilder.generateAndCopy",
+    "onCommand:aiPromptContextBuilder.generateAndSave",
+    "onCommand:aiPromptContextBuilder.openLastGenerated",
+    "onCommand:aiPromptContextBuilder.showDependencyPreview",
+    "onCommand:aiPromptContextBuilder.showOutputLog",
+    "onCommand:aiPromptContextBuilder.checkWorkers",
     "onCommand:aiContextBuilder.generateFromFile",
     "onCommand:aiContextBuilder.generateFromSymbol",
-    "onCommand:aiContextBuilder.generateWithOptions",
-    "onCommand:aiContextBuilder.generateAndCopy",
-    "onCommand:aiContextBuilder.generateAndSave",
-    "onCommand:aiContextBuilder.openLastGenerated",
-    "onCommand:aiContextBuilder.showDependencyPreview",
-    "onCommand:aiContextBuilder.showOutputLog",
-    "onCommand:aiContextBuilder.checkWorkers"
+    "onCommand:aiContextBuilder.generateWithOptions"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "aiContextBuilder.generateFromFile",
+        "command": "aiPromptContextBuilder.generateFromFile",
         "title": "AI Prompt: Generate from Current File",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.generateFromSymbol",
+        "command": "aiPromptContextBuilder.generateFromSymbol",
         "title": "AI Prompt: Generate from Symbol at Cursor",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.generateWithOptions",
+        "command": "aiPromptContextBuilder.generateWithOptions",
         "title": "AI Prompt: Generate with Options...",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.generateAndCopy",
+        "command": "aiPromptContextBuilder.generateAndCopy",
         "title": "AI Prompt: Generate and Copy to Clipboard",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.generateAndSave",
+        "command": "aiPromptContextBuilder.generateAndSave",
         "title": "AI Prompt: Generate and Save to File",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.openLastGenerated",
+        "command": "aiPromptContextBuilder.openLastGenerated",
         "title": "AI Prompt: Open Last Generated Prompt",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.showDependencyPreview",
+        "command": "aiPromptContextBuilder.showDependencyPreview",
         "title": "AI Context: Show Dependency Preview",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.showOutputLog",
+        "command": "aiPromptContextBuilder.showOutputLog",
         "title": "AI Context: Show Output Log",
         "category": "AI Context / Prompt"
       },
       {
-        "command": "aiContextBuilder.checkWorkers",
+        "command": "aiPromptContextBuilder.checkWorkers",
         "title": "AI Context: Check Language Workers",
         "category": "AI Context / Prompt"
       }
@@ -115,127 +118,127 @@
     "menus": {
       "editor/context": [
         {
-          "command": "aiContextBuilder.generateFromFile",
+          "command": "aiPromptContextBuilder.generateFromFile",
           "group": "aiContext@1",
-          "title": "Generate AI Context"
+          "title": "Generate AI Prompt & Context"
         },
         {
-          "command": "aiContextBuilder.generateWithOptions",
+          "command": "aiPromptContextBuilder.generateWithOptions",
           "group": "aiContext@2",
-          "title": "Generate AI Context with Options..."
+          "title": "Generate AI Prompt & Context with Options..."
         }
       ],
       "explorer/context": [
         {
-          "command": "aiContextBuilder.generateFromFile",
+          "command": "aiPromptContextBuilder.generateFromFile",
           "group": "aiContext@1",
-          "title": "Generate AI Context"
+          "title": "Generate AI Prompt & Context"
         }
       ]
     },
     "configuration": {
-      "title": "AI Context Builder",
+      "title": "AI Context Builder & Prompt Generator",
       "properties": {
-        "aiContextBuilder.executablePath": {
+        "aiPromptContextBuilder.executablePath": {
           "type": "string",
-          "default": "aicontext",
-          "description": "Path to the aicontext executable binary or wrapper."
+          "default": "aiprompt",
+          "description": "Path to the aiprompt / aicontext executable binary or wrapper."
         },
-        "aiContextBuilder.outputDirectory": {
+        "aiPromptContextBuilder.outputDirectory": {
           "type": "string",
           "default": "",
           "description": "Optional default directory to write generated context Markdown files."
         },
-        "aiContextBuilder.defaultLanguage": {
+        "aiPromptContextBuilder.defaultLanguage": {
           "type": "string",
           "default": "Auto",
           "enum": ["Auto", "CSharp", "VisualBasic", "TypeScript", "JavaScript", "JSX", "TSX", "HTML", "CSS", "SCSS", "Sass", "Java", "Python", "Go", "Razor", "Vue"],
           "description": "Default language filter for analysis."
         },
-        "aiContextBuilder.defaultFramework": {
+        "aiPromptContextBuilder.defaultFramework": {
           "type": "string",
           "default": "Auto",
           "enum": ["Auto", "None", "AspNetCore", "RazorPages", "Blazor", "Node", "React", "Angular", "Vue"],
           "description": "Default framework adapter to apply."
         },
-        "aiContextBuilder.defaultAnalysisLevel": {
+        "aiPromptContextBuilder.defaultAnalysisLevel": {
           "type": "string",
           "default": "Best",
           "enum": ["Best", "Semantic", "SyntaxAware", "ImportGraph"],
           "description": "Default analysis capability level."
         },
-        "aiContextBuilder.defaultTokenBudget": {
+        "aiPromptContextBuilder.defaultTokenBudget": {
           "type": ["number", "null"],
           "default": null,
           "description": "Default token budget for output document (null means unlimited)."
         },
-        "aiContextBuilder.defaultMaxDepth": {
+        "aiPromptContextBuilder.defaultMaxDepth": {
           "type": ["number", "null"],
           "default": null,
           "description": "Default maximum traversal depth (null means unlimited)."
         },
-        "aiContextBuilder.commentMode": {
+        "aiPromptContextBuilder.commentMode": {
           "type": "string",
           "default": "Preserve",
           "enum": ["Preserve", "Remove", "Auto"],
           "description": "Default comment handling policy."
         },
-        "aiContextBuilder.includeTests": {
+        "aiPromptContextBuilder.includeTests": {
           "type": "boolean",
           "default": false,
           "description": "Include test files by default."
         },
-        "aiContextBuilder.includeGeneratedFiles": {
+        "aiPromptContextBuilder.includeGeneratedFiles": {
           "type": "boolean",
           "default": false,
           "description": "Include compiler or code-generated files."
         },
-        "aiContextBuilder.includeAttributes": {
+        "aiPromptContextBuilder.includeAttributes": {
           "type": "boolean",
           "default": false,
           "description": "Include attribute/decorator dependencies."
         },
-        "aiContextBuilder.includeImplementations": {
+        "aiPromptContextBuilder.includeImplementations": {
           "type": "boolean",
           "default": false,
           "description": "Include concrete implementations of interfaces."
         },
-        "aiContextBuilder.includeCompanionFiles": {
+        "aiPromptContextBuilder.includeCompanionFiles": {
           "type": "boolean",
           "default": true,
           "description": "Include framework companion templates and stylesheets."
         },
-        "aiContextBuilder.includeAssets": {
+        "aiPromptContextBuilder.includeAssets": {
           "type": "boolean",
           "default": false,
           "description": "Include referenced binary assets."
         },
-        "aiContextBuilder.includeConfigurationFiles": {
+        "aiPromptContextBuilder.includeConfigurationFiles": {
           "type": "boolean",
           "default": true,
           "description": "Include configuration files (tsconfig, package.json, etc.)."
         },
-        "aiContextBuilder.saveToFile": {
+        "aiPromptContextBuilder.saveToFile": {
           "type": "boolean",
           "default": true,
           "description": "Save generated markdown to file."
         },
-        "aiContextBuilder.copyToClipboard": {
+        "aiPromptContextBuilder.copyToClipboard": {
           "type": "boolean",
           "default": false,
           "description": "Copy generated markdown to clipboard."
         },
-        "aiContextBuilder.openAfterGeneration": {
+        "aiPromptContextBuilder.openAfterGeneration": {
           "type": "boolean",
           "default": true,
           "description": "Automatically open the generated markdown file in editor."
         },
-        "aiContextBuilder.tokenizer": {
+        "aiPromptContextBuilder.tokenizer": {
           "type": "string",
           "default": "approximate",
           "description": "Token estimator name."
         },
-        "aiContextBuilder.verboseLogging": {
+        "aiPromptContextBuilder.verboseLogging": {
           "type": "boolean",
           "default": false,
           "description": "Enable verbose diagnostic logs."

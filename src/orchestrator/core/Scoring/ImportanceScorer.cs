@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using AiContextBuilder.Core.Graph;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Graph;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Scoring;
+namespace AiPromptContextBuilder.Core.Scoring;
 
 public class ScoringWeights
 {

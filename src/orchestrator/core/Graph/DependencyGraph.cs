@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using AiContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Protocol;
 
-namespace AiContextBuilder.Core.Graph;
+namespace AiPromptContextBuilder.Core.Graph;
 
 public class BfsTraversalItem
 {
