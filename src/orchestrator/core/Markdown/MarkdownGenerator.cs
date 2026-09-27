@@ -100,42 +100,40 @@ public static class MarkdownGenerator
         sb.AppendLine("- Account for the dependency relationships and analysis limitations documented below.");
         sb.AppendLine();
 
-        // 30.4 Generation Details
+        // 30.4 Scope & Context (Clean AI Prompt Mode)
         if (config.IncludeGenerationMetadata)
         {
-            sb.AppendLine("## Generation Details");
+            sb.AppendLine("## Target Scope");
             sb.AppendLine();
-            sb.AppendLine($"- Root path: `{meta.RootPath}`");
-            if (!string.IsNullOrEmpty(meta.RootSymbol))
-            {
-                sb.AppendLine($"- Root symbol: `{meta.RootSymbol}`");
-            }
+            sb.AppendLine($"- Root: `{meta.RootPath}`" + (!string.IsNullOrEmpty(meta.RootSymbol) ? $" (Symbol: `{meta.RootSymbol}`)" : ""));
             sb.AppendLine($"- Workspace: `{meta.WorkspaceName}`");
-            sb.AppendLine($"- Language: {meta.Language}");
-            sb.AppendLine($"- Framework: {meta.Framework}");
-            sb.AppendLine($"- Analysis capability: {meta.AnalysisLevel}");
-            sb.AppendLine($"- Files discovered: {meta.FilesDiscovered}");
-            sb.AppendLine($"- Files included: {budgetResult.IncludedFiles.Count}");
-            sb.AppendLine($"- Files excluded: {allExcludedFiles.Count}");
-            sb.AppendLine($"- Maximum depth: {(config.MaxDepth.HasValue ? config.MaxDepth.Value.ToString() : "Unlimited")}");
-            sb.AppendLine($"- Token budget: {(config.MaxTokens.HasValue ? config.MaxTokens.Value.ToString("N0") : "Unlimited")}");
-            sb.AppendLine($"- Token estimator: {config.Tokenizer}");
-            sb.AppendLine($"- Estimated full tokens: {budgetResult.FullEstimatedTokens:N0}");
-            sb.AppendLine($"- Estimated final tokens: {budgetResult.FinalEstimatedTokens:N0}");
-            sb.AppendLine($"- Comment mode requested: {config.CommentMode}");
-            sb.AppendLine($"- Comment policy applied: {budgetResult.CommentsApplied}");
-            sb.AppendLine($"- Tests included: {config.IncludeTests}");
-            sb.AppendLine($"- Generated files included: {config.IncludeGeneratedFiles}");
-            sb.AppendLine($"- Companion files included: {config.IncludeCompanionFiles}");
-            sb.AppendLine($"- Assets included: {config.IncludeAssets}");
+            if (!string.IsNullOrEmpty(meta.Language) && meta.Language != "Auto")
+            {
+                sb.AppendLine($"- Language: {meta.Language}");
+            }
+            if (!string.IsNullOrEmpty(meta.Framework) && meta.Framework != "None" && meta.Framework != "Auto")
+            {
+                sb.AppendLine($"- Framework: {meta.Framework}");
+            }
+            if (allExcludedFiles.Count > 0)
+            {
+                sb.AppendLine($"- Excluded dependencies: {allExcludedFiles.Count} files (see Excluded Files section below)");
+            }
+            sb.AppendLine();
+
+            // Store internal tooling metadata inside an HTML comment for human auditability without distracting the consuming LLM
+            sb.AppendLine("<!--");
+            sb.AppendLine("  [AI Context Builder - Audit Telemetry]");
+            sb.AppendLine($"  Analysis capability: {meta.AnalysisLevel}");
+            sb.AppendLine($"  Files discovered: {meta.FilesDiscovered} | Included: {budgetResult.IncludedFiles.Count} | Excluded: {allExcludedFiles.Count}");
+            sb.AppendLine($"  Token budget: {(config.MaxTokens.HasValue ? config.MaxTokens.Value.ToString("N0") : "Unlimited")}");
+            sb.AppendLine($"  Estimated tokens: {budgetResult.FinalEstimatedTokens:N0} (estimator: {config.Tokenizer})");
+            sb.AppendLine($"  Comment policy: {budgetResult.CommentsApplied}");
             if (!config.OmitTimestamp)
             {
-                sb.AppendLine($"- Generation timestamp: {DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}");
+                sb.AppendLine($"  Generated: {DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}");
             }
-            else
-            {
-                sb.AppendLine("- Generation timestamp: [Omitted for deterministic testing]");
-            }
+            sb.AppendLine("-->");
             sb.AppendLine();
         }
 

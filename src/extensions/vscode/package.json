@@ -1,9 +1,9 @@
 {
   "name": "ai-context-builder",
   "displayName": "AI Context Builder",
-  "description": "Generate portable, dependency-aware, AI-ready source context from an existing repository.",
+  "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
   "version": "1.0.0",
-  "publisher": "Welcome-Bonginhlahla-Sithole",
+  "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
     "url": "https://github.com/SitholeWB"
@@ -22,7 +22,35 @@
   },
   "categories": [
     "Programming Languages",
+    "Machine Learning",
     "Other"
+  ],
+  "keywords": [
+    "prompt",
+    "prompts",
+    "ai prompt generator",
+    "prompt generator",
+    "ai prompt builder",
+    "prompt builder",
+    "code prompt",
+    "prompt engineering",
+    "ai context",
+    "ai",
+    "context",
+    "llm",
+    "chatgpt",
+    "claude",
+    "copilot",
+    "deepseek",
+    "source context",
+    "code context",
+    "dependencies",
+    "dependency graph",
+    "dotnet",
+    "csharp",
+    "roslyn",
+    "typescript",
+    "python"
   ],
   "activationEvents": [
     "onCommand:aiContextBuilder.generateFromFile",
@@ -40,48 +68,48 @@
     "commands": [
       {
         "command": "aiContextBuilder.generateFromFile",
-        "title": "AI Context: Generate from Current File",
-        "category": "AI Context"
+        "title": "AI Prompt: Generate from Current File",
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.generateFromSymbol",
-        "title": "AI Context: Generate from Symbol at Cursor",
-        "category": "AI Context"
+        "title": "AI Prompt: Generate from Symbol at Cursor",
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.generateWithOptions",
-        "title": "AI Context: Generate with Options",
-        "category": "AI Context"
+        "title": "AI Prompt: Generate with Options...",
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.generateAndCopy",
-        "title": "AI Context: Generate and Copy to Clipboard",
-        "category": "AI Context"
+        "title": "AI Prompt: Generate and Copy to Clipboard",
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.generateAndSave",
-        "title": "AI Context: Generate and Save",
-        "category": "AI Context"
+        "title": "AI Prompt: Generate and Save to File",
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.openLastGenerated",
-        "title": "AI Context: Open Last Generated Context",
-        "category": "AI Context"
+        "title": "AI Prompt: Open Last Generated Prompt",
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.showDependencyPreview",
         "title": "AI Context: Show Dependency Preview",
-        "category": "AI Context"
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.showOutputLog",
         "title": "AI Context: Show Output Log",
-        "category": "AI Context"
+        "category": "AI Context / Prompt"
       },
       {
         "command": "aiContextBuilder.checkWorkers",
         "title": "AI Context: Check Language Workers",
-        "category": "AI Context"
+        "category": "AI Context / Prompt"
       }
     ],
     "menus": {

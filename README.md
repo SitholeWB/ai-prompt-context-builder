@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🧠 AI Context Builder (`aicontext`)
+# 🧠 AI Context Builder & AI Prompt Generator (`aicontext`)
 
-**Generate portable, dependency-aware, AI-ready source context from an existing repository.**
+**Generate portable, dependency-aware, AI-ready prompts and code context from any repository.**
 
 [![CI](https://github.com/aicontext/ai-context-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/aicontext/ai-context-builder/actions)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
