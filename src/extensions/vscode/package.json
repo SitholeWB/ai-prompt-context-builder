@@ -4,6 +4,15 @@
   "description": "Generate portable, dependency-aware, AI-ready source context from an existing repository.",
   "version": "1.0.0",
   "publisher": "deepmind",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SitholeWB/ai-context-builder.git"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "node build.js"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
