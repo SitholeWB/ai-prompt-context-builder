@@ -3,7 +3,11 @@
   "displayName": "AI Context Builder",
   "description": "Generate portable, dependency-aware, AI-ready source context from an existing repository.",
   "version": "1.0.0",
-  "publisher": "deepmind",
+  "publisher": "Welcome-Bonginhlahla-Sithole",
+  "author": {
+    "name": "Welcome Bonginhlahla Sithole",
+    "url": "https://github.com/SitholeWB"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
