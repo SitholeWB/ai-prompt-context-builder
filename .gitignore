@@ -1,19 +1,63 @@
-# Build and Output
+# ==========================================
+# .NET / C# Build Artifacts
+# ==========================================
 bin/
 obj/
-dist/
-out/
-build/
+publish/
+[Bb]uild/
+[Dd]ist/
+[Oo]ut/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+*.nupkg
+*.snupkg
+project.lock.json
+project.assets.json
 
-# Node
+# ==========================================
+# Node.js & Web
+# ==========================================
 node_modules/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
+# ==========================================
 # Python
+# ==========================================
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
 
-# Local context outputs
+# ==========================================
+# Test Results & Coverage
+# ==========================================
+TestResults/
+*.trx
+coverage/
+*.coverage
+*.coveragexml
+
+# ==========================================
+# OS & Editor
+# ==========================================
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+
+# ==========================================
+# Local Context Outputs (Keep test fixtures)
+# ==========================================
 *-context.md
+!tests/golden-files/*-context.md
