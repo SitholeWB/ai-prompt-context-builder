@@ -267,7 +267,7 @@ The repository features comprehensive automated acceptance tests and step-by-ste
 ## 👤 Author & Maintainer
 
 **Welcome Bonginhlahla Sithole**  
-📍 South Africa, KwaZulu Natal, Durban  
+📍 South Africa, KwaZulu Natal  
 🔗 GitHub: [@SitholeWB](https://github.com/SitholeWB)  
 📦 VS Code Marketplace: [sitholewb](https://marketplace.visualstudio.com/publishers/sitholewb)
 
