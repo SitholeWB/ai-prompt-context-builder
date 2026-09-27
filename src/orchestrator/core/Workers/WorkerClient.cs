@@ -34,9 +34,20 @@ public static class WorkerClient
             CreateNoWindow = true
         };
 
-        // Ensure NODE_PATH is configured if calling node
-        psi.Environment["ELECTRON_RUN_AS_NODE"] = "1";
-        psi.Environment["NODE_PATH"] = "/home/wb-sithole/.local/share/antigravity-ide/resources/app/extensions/node_modules";
+        // Configure Node.js environment dynamically if IDE extensions path is available
+        string? homeDir = Environment.GetEnvironmentVariable("HOME") ?? Environment.GetEnvironmentVariable("USERPROFILE");
+        if (!string.IsNullOrEmpty(homeDir))
+        {
+            string ideNodeModules = Path.Combine(homeDir, ".local", "share", "antigravity-ide", "resources", "app", "extensions", "node_modules");
+            if (Directory.Exists(ideNodeModules))
+            {
+                psi.Environment["ELECTRON_RUN_AS_NODE"] = "1";
+                string existingNodePath = Environment.GetEnvironmentVariable("NODE_PATH") ?? "";
+                psi.Environment["NODE_PATH"] = string.IsNullOrEmpty(existingNodePath)
+                    ? ideNodeModules
+                    : $"{ideNodeModules}{Path.PathSeparator}{existingNodePath}";
+            }
+        }
 
         using var process = new Process { StartInfo = psi };
         try

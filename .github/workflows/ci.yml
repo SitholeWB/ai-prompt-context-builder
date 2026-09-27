@@ -25,6 +25,11 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install Node Worker dependencies
+        run: |
+          npm --prefix src/workers/node install
+
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:

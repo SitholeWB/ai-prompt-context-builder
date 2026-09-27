@@ -1,0 +1,13 @@
+{
+  "name": "ai-context-builder-node-worker",
+  "version": "1.0.0",
+  "description": "Node.js worker for TypeScript, JavaScript, React, Angular, Vue, and CSS analysis",
+  "main": "host/worker.js",
+  "scripts": {
+    "start": "node host/worker.js"
+  },
+  "dependencies": {
+    "typescript": "^5.7.0"
+  },
+  "private": true
+}

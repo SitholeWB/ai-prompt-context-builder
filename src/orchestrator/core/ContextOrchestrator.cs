@@ -365,8 +365,8 @@ public class NodeWorkerAdapter : ILanguageAdapter
 
     public async Task<DependencyGraphFragment> AnalyzeAsync(string filePath, string workspaceRoot, UserConfiguration config, CancellationToken cancellationToken = default)
     {
-        string workerJsPath = "/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/src/workers/node/host/worker.js";
-        string nodeExe = "/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/node";
+        string workerJsPath = WorkerLocator.LocateWorkerScript("src/workers/node/host/worker.js");
+        string nodeExe = WorkerLocator.LocateNodeExecutable();
         var nodeReq = new WorkerProtocolRequest
         {
             Operation = "analyse",
@@ -374,7 +374,13 @@ public class NodeWorkerAdapter : ILanguageAdapter
             WorkspacePath = workspaceRoot,
             Language = Path.GetExtension(filePath)
         };
-        var nodeRes = await WorkerClient.ExecuteExternalWorkerAsync(nodeExe, workerJsPath, nodeReq, cancellationToken);
+        var nodeRes = await WorkerClient.ExecuteExternalWorkerAsync(nodeExe, $"\"{workerJsPath}\"", nodeReq, cancellationToken);
+        if (!nodeRes.Success && !string.IsNullOrEmpty(nodeRes.ErrorMessage))
+        {
+            var frag = nodeRes.Graph ?? new DependencyGraphFragment();
+            frag.Warnings.Add(nodeRes.ErrorMessage);
+            return frag;
+        }
         return nodeRes.Graph ?? new DependencyGraphFragment();
     }
 }
@@ -393,7 +399,8 @@ public class PythonWorkerAdapter : ILanguageAdapter
 
     public async Task<DependencyGraphFragment> AnalyzeAsync(string filePath, string workspaceRoot, UserConfiguration config, CancellationToken cancellationToken = default)
     {
-        string workerPyPath = "/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/src/workers/python/aicontext/worker.py";
+        string workerPyPath = WorkerLocator.LocateWorkerScript("src/workers/python/aicontext/worker.py");
+        string pythonExe = WorkerLocator.LocatePythonExecutable();
         var pyReq = new WorkerProtocolRequest
         {
             Operation = "analyse",
@@ -401,7 +408,13 @@ public class PythonWorkerAdapter : ILanguageAdapter
             WorkspacePath = workspaceRoot,
             Language = "Python"
         };
-        var pyRes = await WorkerClient.ExecuteExternalWorkerAsync("python3", workerPyPath, pyReq, cancellationToken);
+        var pyRes = await WorkerClient.ExecuteExternalWorkerAsync(pythonExe, $"\"{workerPyPath}\"", pyReq, cancellationToken);
+        if (!pyRes.Success && !string.IsNullOrEmpty(pyRes.ErrorMessage))
+        {
+            var frag = pyRes.Graph ?? new DependencyGraphFragment();
+            frag.Warnings.Add(pyRes.ErrorMessage);
+            return frag;
+        }
         return pyRes.Graph ?? new DependencyGraphFragment();
     }
 }

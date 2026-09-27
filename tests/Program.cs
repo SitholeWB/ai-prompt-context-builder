@@ -178,10 +178,27 @@ public class Program
         Assert(closeFence == "````", "Close fence should match length");
     }
 
+    private static string ResolveFixture(string relativePath)
+    {
+        var candidates = new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory };
+        foreach (var startDir in candidates)
+        {
+            var dir = new DirectoryInfo(startDir);
+            while (dir != null)
+            {
+                string target = Path.Combine(dir.FullName, relativePath);
+                if (File.Exists(target) || Directory.Exists(target))
+                    return Path.GetFullPath(target);
+                dir = dir.Parent;
+            }
+        }
+        return Path.GetFullPath(relativePath);
+    }
+
     private static void TestDotNetAnalyzer()
     {
-        string root = Path.GetFullPath("tests/fixtures/dotnet/CustomerService.cs");
-        string ws = Path.GetFullPath("tests/fixtures/dotnet");
+        string root = ResolveFixture("tests/fixtures/dotnet/CustomerService.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
         var analyzer = new DotNetAnalyzer();
         var fragment = analyzer.Analyze(root, ws, new UserConfiguration());
 
@@ -192,8 +209,8 @@ public class Program
 
     private static void TestBlazorAnalyzer()
     {
-        string root = Path.GetFullPath("tests/fixtures/dotnet/CustomerCard.razor");
-        string ws = Path.GetFullPath("tests/fixtures/dotnet");
+        string root = ResolveFixture("tests/fixtures/dotnet/CustomerCard.razor");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
         var analyzer = new DotNetAnalyzer();
         var fragment = analyzer.Analyze(root, ws, new UserConfiguration());
 
@@ -205,8 +222,8 @@ public class Program
 
     private static async Task TestNodeWorkerAngular()
     {
-        string root = Path.GetFullPath("tests/fixtures/node/customer.component.ts");
-        string ws = Path.GetFullPath("tests/fixtures/node");
+        string root = ResolveFixture("tests/fixtures/node/customer.component.ts");
+        string ws = ResolveFixture("tests/fixtures/node");
         var adapter = new NodeWorkerAdapter();
         var fragment = await adapter.AnalyzeAsync(root, ws, new UserConfiguration());
 
@@ -218,8 +235,8 @@ public class Program
 
     private static async Task TestNodeWorkerReact()
     {
-        string root = Path.GetFullPath("tests/fixtures/node/CustomerPage.tsx");
-        string ws = Path.GetFullPath("tests/fixtures/node");
+        string root = ResolveFixture("tests/fixtures/node/CustomerPage.tsx");
+        string ws = ResolveFixture("tests/fixtures/node");
         var adapter = new NodeWorkerAdapter();
         var fragment = await adapter.AnalyzeAsync(root, ws, new UserConfiguration());
 
@@ -229,8 +246,8 @@ public class Program
 
     private static async Task TestPythonWorker()
     {
-        string root = Path.GetFullPath("tests/fixtures/python/service.py");
-        string ws = Path.GetFullPath("tests/fixtures/python");
+        string root = ResolveFixture("tests/fixtures/python/service.py");
+        string ws = ResolveFixture("tests/fixtures/python");
         var adapter = new PythonWorkerAdapter();
         var fragment = await adapter.AnalyzeAsync(root, ws, new UserConfiguration());
 

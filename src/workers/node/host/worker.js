@@ -7,10 +7,27 @@ const readline = require('readline');
 let ts = null;
 try {
   ts = require('typescript');
-} catch {
-  try {
-    ts = require('/home/wb-sithole/.local/share/antigravity-ide/resources/app/extensions/node_modules/typescript');
-  } catch {}
+} catch {}
+
+if (!ts) {
+  const candidatePaths = [
+    path.join(__dirname, '../node_modules/typescript'),
+    path.join(__dirname, '../../../../node_modules/typescript'),
+    path.join(process.cwd(), 'node_modules/typescript'),
+  ];
+  if (process.env.NODE_PATH) {
+    candidatePaths.push(path.join(process.env.NODE_PATH, 'typescript'));
+  }
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
+  if (homeDir) {
+    candidatePaths.push(path.join(homeDir, '.local/share/antigravity-ide/resources/app/extensions/node_modules/typescript'));
+  }
+  for (const c of candidatePaths) {
+    try {
+      ts = require(c);
+      if (ts) break;
+    } catch {}
+  }
 }
 
 const rl = readline.createInterface({
@@ -266,6 +283,44 @@ function fallbackJsImportScan(filePath, content, fileNodeId, edges, queue, visit
       if (target) {
         linkAndQueueFile(fileNodeId, target, 'Import', 'High', 'ImportGraph', edges, queue, visitedFiles, workspaceRoot);
       }
+    }
+  }
+
+  // Fallback for Angular @Component: templateUrl & styleUrls
+  const tmplMatch = /templateUrl\s*:\s*['"]([^'"]+)['"]/i.exec(content);
+  if (tmplMatch) {
+    const tmplFile = path.resolve(path.dirname(filePath), tmplMatch[1]);
+    if (fs.existsSync(tmplFile)) {
+      linkAndQueueFile(fileNodeId, tmplFile, 'Template', 'Verified', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
+    }
+  }
+
+  const styleUrlsMatch = /styleUrls\s*:\s*\[([\s\S]*?)\]/i.exec(content);
+  if (styleUrlsMatch) {
+    const styleRegex = /['"]([^'"]+\.(?:css|scss|sass))['"]/g;
+    let sMatch;
+    while ((sMatch = styleRegex.exec(styleUrlsMatch[1])) !== null) {
+      const styleFile = path.resolve(path.dirname(filePath), sMatch[1]);
+      if (fs.existsSync(styleFile)) {
+        linkAndQueueFile(fileNodeId, styleFile, 'Style', 'Verified', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
+      }
+    }
+  }
+
+  // Fallback for React JSX tags: <WidgetName ...
+  const jsxTagRegex = /<([A-Z][A-Za-z0-9_]*)/g;
+  let jMatch;
+  while ((jMatch = jsxTagRegex.exec(content)) !== null) {
+    const tag = jMatch[1];
+    const siblingTsx = path.resolve(path.dirname(filePath), `${tag}.tsx`);
+    const siblingTs = path.resolve(path.dirname(filePath), `${tag}.ts`);
+    const siblingJsx = path.resolve(path.dirname(filePath), `${tag}.jsx`);
+    if (fs.existsSync(siblingTsx)) {
+      linkAndQueueFile(fileNodeId, siblingTsx, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
+    } else if (fs.existsSync(siblingTs)) {
+      linkAndQueueFile(fileNodeId, siblingTs, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
+    } else if (fs.existsSync(siblingJsx)) {
+      linkAndQueueFile(fileNodeId, siblingJsx, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
     }
   }
 }
