@@ -12,14 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="Microsoft.CodeAnalysis">
-      <HintPath>/usr/lib/dotnet/sdk/10.0.112/Microsoft.CodeAnalysis.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-    <Reference Include="Microsoft.CodeAnalysis.CSharp">
-      <HintPath>/usr/lib/dotnet/sdk/10.0.112/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
   </ItemGroup>
 
 </Project>
