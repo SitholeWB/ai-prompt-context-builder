@@ -120,21 +120,6 @@ public static class MarkdownGenerator
                 sb.AppendLine($"- Excluded dependencies: {allExcludedFiles.Count} files (see Excluded Files section below)");
             }
             sb.AppendLine();
-
-            // Store internal tooling metadata inside an HTML comment for human auditability without distracting the consuming LLM
-            sb.AppendLine("<!--");
-            sb.AppendLine("  [AI Context Builder - Audit Telemetry]");
-            sb.AppendLine($"  Analysis capability: {meta.AnalysisLevel}");
-            sb.AppendLine($"  Files discovered: {meta.FilesDiscovered} | Included: {budgetResult.IncludedFiles.Count} | Excluded: {allExcludedFiles.Count}");
-            sb.AppendLine($"  Token budget: {(config.MaxTokens.HasValue ? config.MaxTokens.Value.ToString("N0") : "Unlimited")}");
-            sb.AppendLine($"  Estimated tokens: {budgetResult.FinalEstimatedTokens:N0} (estimator: {config.Tokenizer})");
-            sb.AppendLine($"  Comment policy: {budgetResult.CommentsApplied}");
-            if (!config.OmitTimestamp)
-            {
-                sb.AppendLine($"  Generated: {DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}");
-            }
-            sb.AppendLine("-->");
-            sb.AppendLine();
         }
 
         // 30.5 Analysis Warnings
