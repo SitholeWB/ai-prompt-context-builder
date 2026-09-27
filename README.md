@@ -154,26 +154,71 @@ Options:
 
 ## 🔌 VS Code Extension Guide
 
-The official VS Code extension is located in `src/extensions/vscode/`.
+Generate clean, dependency-aware AI prompts directly inside your editor with single-click ease.
 
-### Commands
+<p align="center">
+  <img src="docs/images/context-menu-demo.png" alt="Right-Click to Generate AI Prompt in VS Code" width="520" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+</p>
 
-| Command | Title | Description |
+### How to Use
+
+#### 1. Right-Click in the File Explorer (Fastest)
+* Right-click any source file in the Explorer tree (`.cs`, `.ts`, `.tsx`, `.razor`, `.py`, `.java`, `.go`, etc.).
+* Click **AI Prompt: Generate from Current File**.
+* The extension automatically traverses direct and transitive dependencies, links companion templates/styles, strips internal noise, and opens the clean prompt in a new editor tab ready to copy into your AI chat.
+
+#### 2. Right-Click Inside Code (Targeted Symbol)
+* Place your cursor on any class name, interface, method, or function.
+* Right-click and choose **AI Prompt: Generate from Symbol at Cursor**.
+* Generates a focused prompt centered on that specific symbol and its required dependency tree.
+
+#### 3. Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+* Press `Ctrl+Shift+P` and type `AI Prompt` to see all available actions.
+* Choose **AI Prompt: Generate with Options...** to open an interactive QuickPick wizard to set:
+  * Token budget limits (e.g. 16k, 32k, 64k, 128k)
+  * Maximum traversal depth
+  * Comment stripping policy (`Preserve`, `Remove`, or `Auto`)
+  * Task description to pre-populate for the consuming AI
+
+---
+
+### Commands Reference
+
+| Command | Title | Action |
 | :--- | :--- | :--- |
-| `aiContextBuilder.generateFromFile` | **AI Context: Generate from Current File** | Analyzes the active editor document |
-| `aiContextBuilder.generateFromSymbol`| **AI Context: Generate from Symbol at Cursor**| Analyzes the specific class/function under cursor |
-| `aiContextBuilder.generateWithOptions`| **AI Context: Generate with Options...** | Interactive QuickPick wizard for budget, depth, and comments |
-| `aiContextBuilder.generateAndCopy` | **AI Context: Generate and Copy** | Copies generated Markdown directly to clipboard |
-| `aiContextBuilder.generateAndSave` | **AI Context: Generate and Save** | Generates and saves to file |
-| `aiContextBuilder.openLastGenerated`| **AI Context: Open Last Generated Context** | Opens previous context document in editor |
-| `aiContextBuilder.showDependencyPreview` | **AI Context: Show Dependency Preview** | Displays ASCII dependency tree notification |
-| `aiContextBuilder.checkWorkers` | **AI Context: Check Language Workers** | Verifies installed compilers and runtime workers |
+| `aiContextBuilder.generateFromFile` | **AI Prompt: Generate from Current File** | Analyzes the active file and all transitive dependencies |
+| `aiContextBuilder.generateFromSymbol`| **AI Prompt: Generate from Symbol at Cursor**| Centers analysis on the selected class/function symbol |
+| `aiContextBuilder.generateWithOptions`| **AI Prompt: Generate with Options...** | Opens interactive wizard for budget, depth, and comment policy |
+| `aiContextBuilder.generateAndCopy` | **AI Prompt: Generate and Copy to Clipboard** | Generates prompt and copies directly to clipboard |
+| `aiContextBuilder.generateAndSave` | **AI Prompt: Generate and Save to File** | Generates and saves directly to disk |
+| `aiContextBuilder.openLastGenerated`| **AI Prompt: Open Last Generated Prompt** | Re-opens the most recent context prompt in the editor |
+| `aiContextBuilder.showDependencyPreview` | **AI Context: Show Dependency Preview** | Displays an ASCII tree notification of discovered dependencies |
+| `aiContextBuilder.checkWorkers` | **AI Context: Check Language Workers** | Verifies compiler health across .NET Roslyn, Node.js, and Python |
 
-### Context Menus
-- **Editor Context Menu**: Right-click anywhere in code -> **Generate AI Context**.
-- **Explorer Context Menu**: Right-click any file in the file tree -> **Generate AI Context**.
+---
+
+### 🎥 Adding Animated GIF Demos to the Marketplace & GitHub
+
+The VS Code Marketplace and GitHub READMEs support animated `.gif` files natively! To show an animated walkthrough:
+
+1. **Record a short 5–10 second clip** of yourself:
+   - Right-clicking a file in the VS Code explorer.
+   - Selecting **AI Prompt: Generate from Current File**.
+   - Showing the clean markdown prompt opening in the editor and pasting it into your AI chat.
+2. **Recommended Free Screen-to-GIF Tools**:
+   - **Linux**: [Peek](https://github.com/phw/peek) (`sudo apt install peek`) or [Kooha](https://github.com/SeaDve/Kooha)
+   - **Windows**: [ScreenToGif](https://www.screentogif.com/) (super clean editor)
+   - **macOS**: [Kap](https://getkap.co/) or [Gifski](https://gifski.com/)
+3. **Drop the GIF into `docs/images/demo.gif`** and embed it in your `README.md`:
+   ```markdown
+   ![AI Prompt Generator in Action](docs/images/demo.gif)
+   ```
+
+---
 
 ### Extension Settings (`aiContextBuilder.*`)
+
+Customize default behavior in **Settings** (`Ctrl+,` -> search `aiContextBuilder`):
 
 ```json
 {
@@ -216,6 +261,15 @@ The repository features comprehensive automated acceptance tests and step-by-ste
 - [Testing and Debugging Guide](docs/testing-and-debugging.md)
 - [Visual Studio Extension Plan (VSIX)](docs/visual-studio-extension-plan.md)
 - [Known Limitations & Transparent Disclosures](docs/known-limitations.md)
+
+---
+
+## 👤 Author & Maintainer
+
+**Welcome Bonginhlahla Sithole**  
+📍 South Africa  
+🔗 GitHub: [@SitholeWB](https://github.com/SitholeWB)  
+📦 VS Code Marketplace: [sitholewb](https://marketplace.visualstudio.com/publishers/sitholewb)
 
 ---
 
