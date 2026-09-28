@@ -5,8 +5,10 @@ import * as fs from 'fs';
 
 let lastGeneratedPath: string | null = null;
 let outputChannel: vscode.OutputChannel;
+let extContext: vscode.ExtensionContext;
 
 export function activate(context: vscode.ExtensionContext) {
+  extContext = context;
   outputChannel = vscode.window.createOutputChannel('AI Context & Prompt Builder');
   context.subscriptions.push(outputChannel);
 
@@ -174,11 +176,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // 9. Check Language Workers
   registerCmd('checkWorkers', async () => {
-    const config = getConfiguration();
-    const exe = resolveExecutablePath(config);
-
-    outputChannel.appendLine(`Checking workers using '${exe}'...`);
-    const proc = spawn(exe, ['check-workers']);
+    const spec = resolveCommand(['check-workers']);
+    outputChannel.appendLine(`Checking workers using ${spec.description}...`);
+    const proc = spawn(spec.command, spec.args, spec.options);
 
     let output = '';
     let stderr = '';
@@ -186,7 +186,7 @@ export function activate(context: vscode.ExtensionContext) {
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
     proc.on('error', (err) => {
-      const msg = `Failed to launch '${exe}': ${err.message}. Please verify 'aicontext' is installed in your PATH or configure 'aiPromptContextBuilder.executablePath'.`;
+      const msg = `Failed to launch '${spec.command}': ${err.message}. Please verify the .NET runtime ('dotnet') is installed on your machine.`;
       outputChannel.appendLine(msg);
       vscode.window.showErrorMessage(msg);
     });
@@ -212,53 +212,123 @@ function getConfiguration(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration('aiContextBuilder');
 }
 
-function resolveExecutablePath(config: vscode.WorkspaceConfiguration): string {
+interface CommandSpec {
+  command: string;
+  args: string[];
+  options: {
+    shell?: boolean;
+    cwd?: string;
+  };
+  description: string;
+}
+
+function resolveCommand(extraArgs: string[]): CommandSpec {
+  const config = getConfiguration();
   const configuredExe = config.get<string>('executablePath')?.trim();
 
-  // If user configured a specific absolute path and it exists, use it
+  // 1. If user explicitly provided a custom path and it exists:
   if (configuredExe && path.isAbsolute(configuredExe) && fs.existsSync(configuredExe)) {
-    return configuredExe;
+    if (configuredExe.toLowerCase().endsWith('.dll')) {
+      return {
+        command: 'dotnet',
+        args: [configuredExe, ...extraArgs],
+        options: {},
+        description: configuredExe,
+      };
+    }
+    return {
+      command: configuredExe,
+      args: extraArgs,
+      options: { shell: process.platform === 'win32' },
+      description: configuredExe,
+    };
   }
 
-  // 1. Check workspace folders for ./bin/aipromptcontext, ./bin/aicontext, etc.
+  // 2. Check bundled portable .NET assembly inside the extension itself!
+  if (extContext && extContext.extensionPath) {
+    const bundledDll = path.join(extContext.extensionPath, 'bin', 'aipromptcontext.dll');
+    if (fs.existsSync(bundledDll)) {
+      return {
+        command: 'dotnet',
+        args: [bundledDll, ...extraArgs],
+        options: {},
+        description: `bundled assembly (${bundledDll})`,
+      };
+    }
+
+    // On Windows, check bundled .cmd wrapper
+    if (process.platform === 'win32') {
+      const bundledCmd = path.join(extContext.extensionPath, 'bin', 'aipromptcontext.cmd');
+      if (fs.existsSync(bundledCmd)) {
+        return {
+          command: bundledCmd,
+          args: extraArgs,
+          options: { shell: true },
+          description: `bundled wrapper (${bundledCmd})`,
+        };
+      }
+    }
+  }
+
+  // 3. Check workspace folders for ./bin/
   if (vscode.workspace.workspaceFolders) {
     for (const folder of vscode.workspace.workspaceFolders) {
       const candidates = [
-        configuredExe ? path.join(folder.uri.fsPath, 'bin', configuredExe) : null,
-        configuredExe ? path.join(folder.uri.fsPath, configuredExe) : null,
+        path.join(folder.uri.fsPath, 'bin', 'aipromptcontext.dll'),
+        path.join(folder.uri.fsPath, 'bin', 'aipromptcontext.cmd'),
+        path.join(folder.uri.fsPath, 'bin', 'aipromptcontext.exe'),
         path.join(folder.uri.fsPath, 'bin', 'aipromptcontext'),
-        path.join(folder.uri.fsPath, 'bin', 'aipromtcontext'),
+        path.join(folder.uri.fsPath, 'bin', 'aicontext.dll'),
+        path.join(folder.uri.fsPath, 'bin', 'aicontext.cmd'),
         path.join(folder.uri.fsPath, 'bin', 'aicontext'),
-        path.join(folder.uri.fsPath, 'bin', 'aiprompt'),
-      ].filter(Boolean) as string[];
-
+      ];
       for (const cand of candidates) {
         if (fs.existsSync(cand)) {
-          return cand;
+          if (cand.toLowerCase().endsWith('.dll')) {
+            return {
+              command: 'dotnet',
+              args: [cand, ...extraArgs],
+              options: {},
+              description: `workspace ${cand}`,
+            };
+          }
+          return {
+            command: cand,
+            args: extraArgs,
+            options: { shell: process.platform === 'win32' },
+            description: `workspace ${cand}`,
+          };
         }
       }
     }
   }
 
-  // 2. Check known local development shims
+  // 4. Check known development shims (for local repo testing)
   const devShims = [
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aipromptcontext',
-    '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aipromtcontext',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aicontext',
-    '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aiprompt',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aipromptcontext',
-    '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aipromtcontext',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aicontext',
-    '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aiprompt',
   ];
   for (const shim of devShims) {
     if (fs.existsSync(shim)) {
-      return shim;
+      return {
+        command: shim,
+        args: extraArgs,
+        options: {},
+        description: `dev shim (${shim})`,
+      };
     }
   }
 
-  // 3. Fallback to configured executable name or 'aipromptcontext'
-  return configuredExe || 'aipromptcontext';
+  // 5. Fallback to system command in PATH
+  const fallback = configuredExe || 'aipromptcontext';
+  return {
+    command: fallback,
+    args: extraArgs,
+    options: { shell: process.platform === 'win32' },
+    description: fallback,
+  };
 }
 
 interface RunOptions {
@@ -272,10 +342,6 @@ interface RunOptions {
 }
 
 async function runGeneration(filePath: string, options: RunOptions) {
-  const config = getConfiguration();
-  const exePath = resolveExecutablePath(config);
-  const exeName = path.basename(exePath);
-
   const phases = [
     'Detecting workspace',
     'Detecting language',
@@ -312,9 +378,10 @@ async function runGeneration(filePath: string, options: RunOptions) {
       if (options.commentMode) args.push('--comments', options.commentMode.toLowerCase());
       if (options.task) args.push('--task', options.task);
 
-      outputChannel.appendLine(`[Execute] ${exePath} ${args.join(' ')}`);
+      const spec = resolveCommand(args);
+      outputChannel.appendLine(`[Execute] ${spec.command} ${spec.args.join(' ')} (resolved via ${spec.description})`);
 
-      const child = spawn(exePath, args);
+      const child = spawn(spec.command, spec.args, spec.options);
 
       token.onCancellationRequested(() => {
         child.kill();
@@ -331,9 +398,16 @@ async function runGeneration(filePath: string, options: RunOptions) {
       await new Promise<void>((resolve, reject) => {
         child.on('error', (err) => {
           clearInterval(interval);
-          const msg = `Failed to launch '${exeName}': ${err.message}. Please verify 'aicontext' is installed in your PATH or configure 'aiPromptContextBuilder.executablePath' in VS Code Settings.`;
-          outputChannel.appendLine(msg);
-          vscode.window.showErrorMessage(msg);
+          outputChannel.appendLine(`Failed to launch process '${spec.command}': ${err.message}`);
+
+          let userHelp = `Failed to launch '${spec.command}': ${err.message}.`;
+          if (spec.command === 'dotnet') {
+            userHelp = `Unable to run .NET runtime ('dotnet'). The extension uses .NET to generate code context. Please install .NET from https://dotnet.microsoft.com/download, or configure 'aiPromptContextBuilder.executablePath' in VS Code Settings.`;
+          } else if (err.message.includes('ENOENT')) {
+            userHelp = `Executable '${spec.command}' was not found. Please install the .NET Runtime on your Windows machine, or configure 'aiPromptContextBuilder.executablePath' in VS Code Settings to point to your .NET executable or CLI.`;
+          }
+
+          vscode.window.showErrorMessage(userHelp);
           reject(err);
         });
 
@@ -352,11 +426,11 @@ async function runGeneration(filePath: string, options: RunOptions) {
                 reject(new Error(res.message));
               }
             } catch (e: any) {
-              vscode.window.showErrorMessage(`Failed to parse result from ${exeName}: ${e.message}`);
+              vscode.window.showErrorMessage(`Failed to parse result from generator: ${e.message}`);
               reject(e);
             }
           } else {
-            vscode.window.showErrorMessage(`${exeName} exited with code ${code}. Error: ${stderr}`);
+            vscode.window.showErrorMessage(`Process exited with code ${code}. Error: ${stderr || stdout}`);
             reject(new Error(`Exit code ${code}`));
           }
         });
