@@ -3,7 +3,7 @@
   "displayName": "AI Context Builder & Prompt Generator",
   "icon": "media/icon.png",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -63,6 +63,7 @@
     "onCommand:aiPromptContextBuilder.showDependencyPreview",
     "onCommand:aiPromptContextBuilder.showOutputLog",
     "onCommand:aiPromptContextBuilder.checkWorkers",
+    "onCommand:aiPromptContextBuilder.acquireRuntime",
     "onCommand:aiContextBuilder.generateFromFile",
     "onCommand:aiContextBuilder.generateFromSymbol",
     "onCommand:aiContextBuilder.generateWithOptions"
@@ -113,6 +114,11 @@
       {
         "command": "aiPromptContextBuilder.checkWorkers",
         "title": "AI Context: Check Language Workers",
+        "category": "AI Context / Prompt"
+      },
+      {
+        "command": "aiPromptContextBuilder.acquireRuntime",
+        "title": "AI Context: Auto-Install / Acquire .NET Runtime",
         "category": "AI Context / Prompt"
       }
     ],

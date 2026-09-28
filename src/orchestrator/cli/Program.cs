@@ -28,7 +28,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.2");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.0.3");
             return 0;
         }
 
@@ -277,7 +277,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.2
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.3
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:

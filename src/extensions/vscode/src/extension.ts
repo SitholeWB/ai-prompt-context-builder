@@ -185,10 +185,9 @@ export function activate(context: vscode.ExtensionContext) {
     proc.stdout.on('data', (d) => { output += d.toString(); });
     proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
-    proc.on('error', (err) => {
-      const msg = `Failed to launch '${spec.command}': ${err.message}. Please verify the .NET runtime ('dotnet') is installed on your machine.`;
-      outputChannel.appendLine(msg);
-      vscode.window.showErrorMessage(msg);
+    proc.on('error', async (err) => {
+      outputChannel.appendLine(`Failed to launch '${spec.command}': ${err.message}`);
+      await handleMissingRuntime(spec.command, err);
     });
 
     proc.on('close', (code) => {
@@ -201,6 +200,11 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`Worker check failed with exit code ${code}. See output log for details.`);
       }
     });
+  });
+
+  // 10. Auto-Install / Acquire .NET Runtime
+  registerCmd('acquireRuntime', async () => {
+    await installDotnetViaExtension();
   });
 }
 
@@ -248,11 +252,13 @@ function resolveCommand(extraArgs: string[]): CommandSpec {
   if (extContext && extContext.extensionPath) {
     const bundledDll = path.join(extContext.extensionPath, 'bin', 'aipromptcontext.dll');
     if (fs.existsSync(bundledDll)) {
+      const acquiredDotnet = extContext.globalState.get<string>('acquiredDotnetPath');
+      const dotnetHost = (acquiredDotnet && fs.existsSync(acquiredDotnet)) ? acquiredDotnet : 'dotnet';
       return {
-        command: 'dotnet',
+        command: dotnetHost,
         args: [bundledDll, ...extraArgs],
         options: {},
-        description: `bundled assembly (${bundledDll})`,
+        description: `bundled assembly (${bundledDll}) via ${dotnetHost}`,
       };
     }
 
@@ -396,18 +402,10 @@ async function runGeneration(filePath: string, options: RunOptions) {
       child.stderr.on('data', (d) => { stderr += d.toString(); });
 
       await new Promise<void>((resolve, reject) => {
-        child.on('error', (err) => {
+        child.on('error', async (err) => {
           clearInterval(interval);
           outputChannel.appendLine(`Failed to launch process '${spec.command}': ${err.message}`);
-
-          let userHelp = `Failed to launch '${spec.command}': ${err.message}.`;
-          if (spec.command === 'dotnet') {
-            userHelp = `Unable to run .NET runtime ('dotnet'). The extension uses .NET to generate code context. Please install .NET from https://dotnet.microsoft.com/download, or configure 'aiPromptContextBuilder.executablePath' in VS Code Settings.`;
-          } else if (err.message.includes('ENOENT')) {
-            userHelp = `Executable '${spec.command}' was not found. Please install the .NET Runtime on your Windows machine, or configure 'aiPromptContextBuilder.executablePath' in VS Code Settings to point to your .NET executable or CLI.`;
-          }
-
-          vscode.window.showErrorMessage(userHelp);
+          await handleMissingRuntime(spec.command, err);
           reject(err);
         });
 
@@ -459,6 +457,90 @@ function handleSuccess(res: any) {
         await vscode.env.clipboard.writeText(res.outputPath);
       }
     });
+}
+
+async function installDotnetViaExtension(): Promise<string | undefined> {
+  return await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Acquiring .NET Runtime for AI Context Builder...',
+      cancellable: false,
+    },
+    async (progress) => {
+      try {
+        progress.report({ message: 'Checking VS Code .NET Install Tool...' });
+        const dotnetExt = vscode.extensions.getExtension('ms-dotnettools.vscode-dotnet-runtime');
+        if (!dotnetExt) {
+          progress.report({ message: 'Installing VS Code .NET Install Tool...' });
+          await vscode.commands.executeCommand('workbench.extensions.installExtension', 'ms-dotnettools.vscode-dotnet-runtime');
+        }
+
+        progress.report({ message: 'Downloading portable .NET runtime...' });
+        const res = await vscode.commands.executeCommand<{ dotnetPath: string }>('dotnet.acquire', {
+          version: '10.0',
+          requestingExtensionId: 'sitholewb.ai-prompt-context-builder',
+        });
+
+        if (res && res.dotnetPath) {
+          if (extContext) {
+            await extContext.globalState.update('acquiredDotnetPath', res.dotnetPath);
+          }
+          vscode.window.showInformationMessage(`Portable .NET runtime acquired successfully: ${res.dotnetPath}`);
+          outputChannel.appendLine(`[Runtime] Acquired portable runtime at: ${res.dotnetPath}`);
+          return res.dotnetPath;
+        }
+      } catch (err: any) {
+        outputChannel.appendLine(`[Runtime] Auto-install via .NET Install Tool failed: ${err.message}`);
+        vscode.window.showWarningMessage(
+          `Could not auto-acquire .NET runtime via VS Code: ${err.message}. Please install .NET manually.`,
+          'Open Download Page'
+        ).then((choice) => {
+          if (choice === 'Open Download Page') {
+            vscode.env.openExternal(vscode.Uri.parse('https://dotnet.microsoft.com/download/dotnet/10.0'));
+          }
+        });
+      }
+      return undefined;
+    }
+  );
+}
+
+async function handleMissingRuntime(failedCommand: string, error?: Error): Promise<void> {
+  const isWindows = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+
+  outputChannel.appendLine(`[Runtime Missing] Command '${failedCommand}' failed: ${error?.message || 'Not found'}`);
+
+  const autoInstallAction = 'Auto-Install via VS Code (.NET Tool)';
+  const terminalAction = isWindows ? 'Install via Winget (Terminal)' : (isMac ? 'Install via Homebrew' : 'Install via Package Manager');
+  const downloadAction = 'Download .NET (.exe)';
+  const configureAction = 'Configure Executable Path';
+
+  const selected = await vscode.window.showErrorMessage(
+    `AI Context Builder requires the .NET runtime to generate prompts and analyze dependencies, but '${failedCommand}' was not found.`,
+    autoInstallAction,
+    terminalAction,
+    downloadAction,
+    configureAction
+  );
+
+  if (selected === autoInstallAction) {
+    await installDotnetViaExtension();
+  } else if (selected === terminalAction) {
+    const term = vscode.window.createTerminal('Install .NET Runtime');
+    term.show();
+    if (isWindows) {
+      term.sendText('winget install Microsoft.DotNet.Runtime.10 || winget install Microsoft.DotNet.DesktopRuntime.10');
+    } else if (isMac) {
+      term.sendText('brew install dotnet');
+    } else {
+      term.sendText('sudo apt-get update && sudo apt-get install -y dotnet-runtime-10.0 || sudo dnf install dotnet-runtime-10.0');
+    }
+  } else if (selected === downloadAction) {
+    vscode.env.openExternal(vscode.Uri.parse('https://dotnet.microsoft.com/download/dotnet/10.0'));
+  } else if (selected === configureAction) {
+    vscode.commands.executeCommand('workbench.action.openSettings', 'aiPromptContextBuilder.executablePath');
+  }
 }
 
 export function deactivate() {}
