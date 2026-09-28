@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="media/icon.png" width="128" height="128" alt="AI Prompt Context Builder Icon" style="border-radius: 24px;" />
+
 # 🧠 AI Context Builder & AI Prompt Generator (`aicontext`)
 
 **Generate portable, dependency-aware, AI-ready prompts and code context from any repository.**

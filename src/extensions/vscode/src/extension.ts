@@ -175,17 +175,31 @@ export function activate(context: vscode.ExtensionContext) {
   // 9. Check Language Workers
   registerCmd('checkWorkers', async () => {
     const config = getConfiguration();
-    const exe = config.get<string>('executablePath') || 'aiprompt';
+    const exe = resolveExecutablePath(config);
 
     outputChannel.appendLine(`Checking workers using '${exe}'...`);
     const proc = spawn(exe, ['check-workers']);
 
     let output = '';
+    let stderr = '';
     proc.stdout.on('data', (d) => { output += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+
+    proc.on('error', (err) => {
+      const msg = `Failed to launch '${exe}': ${err.message}. Please verify 'aicontext' is installed in your PATH or configure 'aiPromptContextBuilder.executablePath'.`;
+      outputChannel.appendLine(msg);
+      vscode.window.showErrorMessage(msg);
+    });
+
     proc.on('close', (code) => {
-      outputChannel.appendLine(output);
+      if (output) outputChannel.appendLine(output);
+      if (stderr) outputChannel.appendLine(stderr);
       outputChannel.show();
-      vscode.window.showInformationMessage(`Language workers verified (exit code: ${code}). See output log.`);
+      if (code === 0) {
+        vscode.window.showInformationMessage(`Language workers verified successfully (exit code: ${code}). See output log.`);
+      } else {
+        vscode.window.showErrorMessage(`Worker check failed with exit code ${code}. See output log for details.`);
+      }
     });
   });
 }
@@ -196,6 +210,49 @@ function getConfiguration(): vscode.WorkspaceConfiguration {
     return primary;
   }
   return vscode.workspace.getConfiguration('aiContextBuilder');
+}
+
+function resolveExecutablePath(config: vscode.WorkspaceConfiguration): string {
+  const configuredExe = config.get<string>('executablePath')?.trim();
+
+  // If user configured a specific absolute path and it exists, use it
+  if (configuredExe && path.isAbsolute(configuredExe) && fs.existsSync(configuredExe)) {
+    return configuredExe;
+  }
+
+  // 1. Check workspace folders for ./bin/aicontext, ./bin/aiprompt
+  if (vscode.workspace.workspaceFolders) {
+    for (const folder of vscode.workspace.workspaceFolders) {
+      const candidates = [
+        configuredExe ? path.join(folder.uri.fsPath, 'bin', configuredExe) : null,
+        configuredExe ? path.join(folder.uri.fsPath, configuredExe) : null,
+        path.join(folder.uri.fsPath, 'bin', 'aicontext'),
+        path.join(folder.uri.fsPath, 'bin', 'aiprompt'),
+      ].filter(Boolean) as string[];
+
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) {
+          return cand;
+        }
+      }
+    }
+  }
+
+  // 2. Check known local development shims
+  const devShims = [
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aicontext',
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aiprompt',
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aicontext',
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aiprompt',
+  ];
+  for (const shim of devShims) {
+    if (fs.existsSync(shim)) {
+      return shim;
+    }
+  }
+
+  // 3. Fallback to configured executable name or 'aicontext'
+  return configuredExe || 'aicontext';
 }
 
 interface RunOptions {
@@ -210,19 +267,8 @@ interface RunOptions {
 
 async function runGeneration(filePath: string, options: RunOptions) {
   const config = getConfiguration();
-  const configuredExe = config.get<string>('executablePath') || 'aiprompt';
-
-  // Resolve executable path
-  let exePath = configuredExe;
-  if (!path.isAbsolute(exePath)) {
-    const localShimPrompt = '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aiprompt';
-    const localShimContext = '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aicontext';
-    if (fs.existsSync(localShimPrompt)) {
-      exePath = localShimPrompt;
-    } else if (fs.existsSync(localShimContext)) {
-      exePath = localShimContext;
-    }
-  }
+  const exePath = resolveExecutablePath(config);
+  const exeName = path.basename(exePath);
 
   const phases = [
     'Detecting workspace',
@@ -277,6 +323,14 @@ async function runGeneration(filePath: string, options: RunOptions) {
       child.stderr.on('data', (d) => { stderr += d.toString(); });
 
       await new Promise<void>((resolve, reject) => {
+        child.on('error', (err) => {
+          clearInterval(interval);
+          const msg = `Failed to launch '${exeName}': ${err.message}. Please verify 'aicontext' is installed in your PATH or configure 'aiPromptContextBuilder.executablePath' in VS Code Settings.`;
+          outputChannel.appendLine(msg);
+          vscode.window.showErrorMessage(msg);
+          reject(err);
+        });
+
         child.on('close', (code) => {
           clearInterval(interval);
           if (code === 0) {
@@ -292,11 +346,11 @@ async function runGeneration(filePath: string, options: RunOptions) {
                 reject(new Error(res.message));
               }
             } catch (e: any) {
-              vscode.window.showErrorMessage(`Failed to parse result from aiprompt: ${e.message}`);
+              vscode.window.showErrorMessage(`Failed to parse result from ${exeName}: ${e.message}`);
               reject(e);
             }
           } else {
-            vscode.window.showErrorMessage(`aiprompt exited with code ${code}. Error: ${stderr}`);
+            vscode.window.showErrorMessage(`${exeName} exited with code ${code}. Error: ${stderr}`);
             reject(new Error(`Exit code ${code}`));
           }
         });

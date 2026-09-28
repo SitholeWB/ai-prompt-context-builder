@@ -1,8 +1,9 @@
 {
   "name": "ai-prompt-context-builder",
   "displayName": "AI Context Builder & Prompt Generator",
+  "icon": "media/icon.png",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -141,8 +142,8 @@
       "properties": {
         "aiPromptContextBuilder.executablePath": {
           "type": "string",
-          "default": "aiprompt",
-          "description": "Path to the aiprompt / aicontext executable binary or wrapper."
+          "default": "aicontext",
+          "description": "Path to the aicontext executable binary or wrapper."
         },
         "aiPromptContextBuilder.outputDirectory": {
           "type": "string",

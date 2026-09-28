@@ -28,7 +28,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aiprompt (aicontext) version 1.0.0");
+            Console.WriteLine("aicontext (aiprompt) version 1.0.1");
             return 0;
         }
 
@@ -190,7 +190,7 @@ public class Program
 
         if (format == "text")
         {
-            Console.Error.WriteLine($"[aiprompt] Analyzing source: {config.RootPath}...");
+            Console.Error.WriteLine($"[aicontext] Analyzing source: {config.RootPath}...");
         }
 
         var orchestrator = new ContextOrchestrator();
@@ -277,13 +277,13 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aiprompt / aicontext) - Version 1.0.0
+        Console.WriteLine(@"AI Prompt & Context Builder (aicontext / aiprompt) - Version 1.0.1
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
-  aiprompt generate --file <path> [options]
-  aiprompt check-workers
-  (or aicontext generate / aicontext check-workers)
+  aicontext generate --file <path> [options]
+  aicontext check-workers
+  (or aiprompt generate / aiprompt check-workers)
 
 Required:
   --file <path>                  Target source file to analyze
