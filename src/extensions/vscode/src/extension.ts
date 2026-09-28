@@ -220,12 +220,14 @@ function resolveExecutablePath(config: vscode.WorkspaceConfiguration): string {
     return configuredExe;
   }
 
-  // 1. Check workspace folders for ./bin/aicontext, ./bin/aiprompt
+  // 1. Check workspace folders for ./bin/aipromptcontext, ./bin/aicontext, etc.
   if (vscode.workspace.workspaceFolders) {
     for (const folder of vscode.workspace.workspaceFolders) {
       const candidates = [
         configuredExe ? path.join(folder.uri.fsPath, 'bin', configuredExe) : null,
         configuredExe ? path.join(folder.uri.fsPath, configuredExe) : null,
+        path.join(folder.uri.fsPath, 'bin', 'aipromptcontext'),
+        path.join(folder.uri.fsPath, 'bin', 'aipromtcontext'),
         path.join(folder.uri.fsPath, 'bin', 'aicontext'),
         path.join(folder.uri.fsPath, 'bin', 'aiprompt'),
       ].filter(Boolean) as string[];
@@ -240,8 +242,12 @@ function resolveExecutablePath(config: vscode.WorkspaceConfiguration): string {
 
   // 2. Check known local development shims
   const devShims = [
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aipromptcontext',
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aipromtcontext',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aicontext',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-context-builder/bin/aiprompt',
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aipromptcontext',
+    '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aipromtcontext',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aicontext',
     '/home/wb-sithole/.gemini/antigravity/scratch/ai-prompt-context-builder/bin/aiprompt',
   ];
@@ -251,8 +257,8 @@ function resolveExecutablePath(config: vscode.WorkspaceConfiguration): string {
     }
   }
 
-  // 3. Fallback to configured executable name or 'aicontext'
-  return configuredExe || 'aicontext';
+  // 3. Fallback to configured executable name or 'aipromptcontext'
+  return configuredExe || 'aipromptcontext';
 }
 
 interface RunOptions {

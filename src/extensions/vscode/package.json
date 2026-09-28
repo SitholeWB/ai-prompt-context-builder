@@ -142,8 +142,8 @@
       "properties": {
         "aiPromptContextBuilder.executablePath": {
           "type": "string",
-          "default": "aicontext",
-          "description": "Path to the aicontext executable binary or wrapper."
+          "default": "aipromptcontext",
+          "description": "Path to the aipromptcontext / aicontext executable binary or wrapper."
         },
         "aiPromptContextBuilder.outputDirectory": {
           "type": "string",
