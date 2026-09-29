@@ -1,14 +1,28 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Workspace;
 
 namespace AiPromptContextBuilder.Core.Workers;
 
 public static class JavaGoAnalyzer
 {
+    private static readonly ConcurrentDictionary<string, (DateTime CachedAt, WorkspaceFileIndex Index)> _indexCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static WorkspaceFileIndex GetWorkspaceIndex(string workspaceRoot)
+    {
+        if (_indexCache.TryGetValue(workspaceRoot, out var cached) && (DateTime.UtcNow - cached.CachedAt).TotalSeconds < 10)
+        {
+            return cached.Index;
+        }
+        var fresh = new WorkspaceFileIndex(workspaceRoot);
+        _indexCache[workspaceRoot] = (DateTime.UtcNow, fresh);
+        return fresh;
+    }
     public static DependencyGraphFragment AnalyzeJava(string rootPath, string workspaceRoot)
     {
         var fragment = new DependencyGraphFragment();
@@ -19,6 +33,8 @@ public static class JavaGoAnalyzer
         var queue = new Queue<string>();
         queue.Enqueue(normalizedRoot);
         visited.Add(normalizedRoot);
+
+        var wsIndex = GetWorkspaceIndex(workspaceRoot);
 
         while (queue.Count > 0)
         {
@@ -54,8 +70,8 @@ public static class JavaGoAnalyzer
                     string candidateName = parts[i];
                     if (string.IsNullOrEmpty(candidateName) || candidateName == "*") continue;
 
-                    var localFiles = Directory.GetFiles(workspaceRoot, $"{candidateName}.java", SearchOption.AllDirectories);
-                    if (localFiles.Length > 0)
+                    var localFiles = wsIndex.FindFilesByName($"{candidateName}.java");
+                    if (localFiles.Count > 0)
                     {
                         var relType = isStatic ? RelationshipType.ExtensionMethod : RelationshipType.Import;
                         foreach (var lf in localFiles)
@@ -88,7 +104,7 @@ public static class JavaGoAnalyzer
                 foreach (Match cr in classRefs)
                 {
                     string className = cr.Groups[1].Value;
-                    var localFiles = Directory.GetFiles(workspaceRoot, $"{className}.java", SearchOption.AllDirectories);
+                    var localFiles = wsIndex.FindFilesByName($"{className}.java");
                     foreach (var lf in localFiles)
                     {
                         string targetRel = Path.GetRelativePath(workspaceRoot, lf).Replace('\\', '/');
@@ -114,7 +130,7 @@ public static class JavaGoAnalyzer
             foreach (Match sc in staticCalls)
             {
                 string className = sc.Groups[1].Value;
-                var localFiles = Directory.GetFiles(workspaceRoot, $"{className}.java", SearchOption.AllDirectories);
+                var localFiles = wsIndex.FindFilesByName($"{className}.java");
                 foreach (var lf in localFiles)
                 {
                     string targetRel = Path.GetRelativePath(workspaceRoot, lf).Replace('\\', '/');
@@ -178,7 +194,7 @@ public static class JavaGoAnalyzer
                 foreach (var iface in ifaces)
                 {
                     if (string.IsNullOrEmpty(iface)) continue;
-                    var ifaceFiles = Directory.GetFiles(workspaceRoot, $"{iface}.java", SearchOption.AllDirectories);
+                    var ifaceFiles = wsIndex.FindFilesByName($"{iface}.java");
                     foreach (var f in ifaceFiles)
                     {
                         LinkJavaFile(fileNodeId, f, RelationshipType.Interface, fragment, queue, visited, workspaceRoot);
@@ -191,7 +207,7 @@ public static class JavaGoAnalyzer
             foreach (Match rt in referencedTypes)
             {
                 string tName = rt.Groups[1].Value;
-                var implFiles = Directory.GetFiles(workspaceRoot, $"{tName}Impl.java", SearchOption.AllDirectories);
+                var implFiles = wsIndex.FindFilesByName($"{tName}Impl.java");
                 foreach (var f in implFiles)
                 {
                     LinkJavaFile(fileNodeId, f, RelationshipType.Implementation, fragment, queue, visited, workspaceRoot);
@@ -205,7 +221,7 @@ public static class JavaGoAnalyzer
                 if (elm.Groups[1].Success)
                 {
                     string eventClass = elm.Groups[1].Value;
-                    var eventFiles = Directory.GetFiles(workspaceRoot, $"{eventClass}.java", SearchOption.AllDirectories);
+                    var eventFiles = wsIndex.FindFilesByName($"{eventClass}.java");
                     foreach (var ef in eventFiles)
                     {
                         LinkJavaFile(fileNodeId, ef, RelationshipType.EventType, fragment, queue, visited, workspaceRoot);
@@ -217,7 +233,7 @@ public static class JavaGoAnalyzer
             foreach (Match emm in eventMethodMatches)
             {
                 string eventClass = emm.Groups[1].Value;
-                var eventFiles = Directory.GetFiles(workspaceRoot, $"{eventClass}.java", SearchOption.AllDirectories);
+                var eventFiles = wsIndex.FindFilesByName($"{eventClass}.java");
                 foreach (var ef in eventFiles)
                 {
                     LinkJavaFile(fileNodeId, ef, RelationshipType.EventType, fragment, queue, visited, workspaceRoot);
@@ -231,7 +247,7 @@ public static class JavaGoAnalyzer
                 string annoName = am.Groups[1].Value;
                 if (annoName is not ("Override" or "Deprecated" or "SuppressWarnings" or "Nullable" or "NonNull" or "Test"))
                 {
-                    var annoFiles = Directory.GetFiles(workspaceRoot, $"{annoName}.java", SearchOption.AllDirectories);
+                    var annoFiles = wsIndex.FindFilesByName($"{annoName}.java");
                     foreach (var af in annoFiles)
                     {
                         LinkJavaFile(fileNodeId, af, RelationshipType.Annotation, fragment, queue, visited, workspaceRoot);
@@ -240,7 +256,7 @@ public static class JavaGoAnalyzer
                 if (am.Groups[2].Success)
                 {
                     string targetClass = am.Groups[2].Value;
-                    var targetFiles = Directory.GetFiles(workspaceRoot, $"{targetClass}.java", SearchOption.AllDirectories);
+                    var targetFiles = wsIndex.FindFilesByName($"{targetClass}.java");
                     foreach (var tf in targetFiles)
                     {
                         LinkJavaFile(fileNodeId, tf, RelationshipType.Annotation, fragment, queue, visited, workspaceRoot);

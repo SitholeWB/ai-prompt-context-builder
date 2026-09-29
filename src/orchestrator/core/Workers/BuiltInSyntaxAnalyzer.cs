@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Workspace;
 
 namespace AiPromptContextBuilder.Core.Workers;
 
@@ -13,6 +15,19 @@ namespace AiPromptContextBuilder.Core.Workers;
 /// </summary>
 public static class BuiltInSyntaxAnalyzer
 {
+    private static readonly ConcurrentDictionary<string, (DateTime CachedAt, WorkspaceFileIndex Index)> _indexCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static WorkspaceFileIndex GetWorkspaceIndex(string workspaceRoot)
+    {
+        if (_indexCache.TryGetValue(workspaceRoot, out var cached) && (DateTime.UtcNow - cached.CachedAt).TotalSeconds < 10)
+        {
+            return cached.Index;
+        }
+        var fresh = new WorkspaceFileIndex(workspaceRoot);
+        _indexCache[workspaceRoot] = (DateTime.UtcNow, fresh);
+        return fresh;
+    }
+
     private static readonly string[] JsExtensions = new[]
     {
         ".tsx", ".ts", ".jsx", ".js", ".mjs", ".cjs", ".vue", ".json", ".css", ".scss", ".sass", ".html"
@@ -330,16 +345,15 @@ public static class BuiltInSyntaxAnalyzer
         if (methodCalls.Count > 0)
         {
             var calledMethodNames = new HashSet<string>(methodCalls.Select(m => m.Groups[1].Value), StringComparer.Ordinal);
-            string[] candidateExtFiles;
+            IReadOnlyList<string> candidateExtFiles;
             try
             {
-                candidateExtFiles = Directory.GetFiles(workspaceRoot, "*.*", SearchOption.AllDirectories)
-                    .Where(f =>
-                    {
-                        string name = Path.GetFileName(f).ToLowerInvariant();
-                        return (name.Contains("extension") || name.Contains("polyfill")) && (name.EndsWith(".ts") || name.EndsWith(".js"));
-                    })
-                    .ToArray();
+                var wsIndex = GetWorkspaceIndex(workspaceRoot);
+                candidateExtFiles = wsIndex.FindMatchingFiles(rel =>
+                {
+                    string name = Path.GetFileName(rel).ToLowerInvariant();
+                    return (name.Contains("extension") || name.Contains("polyfill")) && (name.EndsWith(".ts") || name.EndsWith(".js"));
+                });
             }
             catch
             {
@@ -639,16 +653,9 @@ public static class BuiltInSyntaxAnalyzer
 
         try
         {
-            foreach (var ext in exts)
-            {
-                var matches = Directory.GetFiles(workspaceRoot, symbolName + ext, SearchOption.AllDirectories);
-                var valid = matches.FirstOrDefault(m =>
-                {
-                    string norm = m.Replace('\\', '/');
-                    return !norm.Contains("/node_modules/") && !norm.Contains("/dist/") && !norm.Contains("/build/") && !norm.Contains("/.git/");
-                });
-                if (valid != null) return valid;
-            }
+            var wsIndex = GetWorkspaceIndex(workspaceRoot);
+            var matches = wsIndex.FindFilesByBaseName(symbolName, exts);
+            if (matches.Count > 0) return matches[0];
         }
         catch { }
 

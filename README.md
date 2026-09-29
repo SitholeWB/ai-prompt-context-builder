@@ -27,10 +27,31 @@
 
 ## 🔌 VS Code Extension Guide
 
-Generate clean, dependency-aware AI prompts directly inside your editor with single-click ease.
+**Stop manually copying and pasting 10+ different files into ChatGPT, Claude, or Copilot.**
+
+AI Context Builder analyzes your code using deep compiler ASTs, automatically discovers direct and transitive dependencies, resolves framework companions (like `.razor` code-behinds, scoped `.scss`, React JSX widgets, or Angular templates), and generates **exactly one authoritative, untruncated Markdown prompt** ready to paste into your AI assistant.
+
+### ⚡ Supported Languages & Deep Compiler Traversal
+
+| Ecosystem | Extensions | Compiler / Runtime Capabilities |
+| :--- | :--- | :--- |
+| **C# / .NET** | `.cs`, `.razor`, `.cshtml` | Roslyn Semantic AST, Dependency Injection (`implements`), Partial classes across files, CQRS event handlers (`IRequestHandler`, `INotificationHandler`), Extension methods & attributes |
+| **TypeScript & React** | `.ts`, `.tsx`, `.jsx`, `.js` | TS Compiler API, JSX component hierarchy, Angular (`templateUrl`/`styleUrls`), Vue SFC, Prototype extensions |
+| **Python** | `.py` | AST imports & dotted references, Django signals (`@receiver`), Celery tasks, Mixin resolution |
+| **Rust** | `.rs` | Cargo modules (`mod foo;`), `use crate::...`, Trait implementations (`impl Trait for Struct`), Derives & macros |
+| **Kotlin** | `.kt`, `.kts` | Package/imports, Extension functions (`fun Type.ext()`), Class inheritance & Compose annotations |
+| **PHP** | `.php` | PHP 8 Attributes (`#[Route]`, `#[Inject]`), PSR-4 namespaces, Trait use statements, Blade view linking |
+| **Dart & Flutter** | `.dart` | Widget hierarchy, Companion `part` / `part of` files (`*.g.dart`), Bloc & Riverpod events |
+| **Java & Go** | `.java`, `.go` | Spring `@EventListener`, Interface $\leftrightarrow$ `*Impl.java`, Package refs, Go structs & `go.mod` |
+| **C & C++** | `.c`, `.cpp`, `.cc`, `.h`, `.hpp` | Automatic companion linking (`.cpp` $\leftrightarrow$ `.h`), `#include` tree resolution, Base classes |
+| **Web & Styles** | `.html`, `.css`, `.scss`, `.sass` | Scoped styles, SCSS `@import` & partials (`_variables.scss`), HTML script/style links |
+
+> 🔒 **100% Local & Safe**: Zero source code upload, zero telemetry, zero API keys required. Automatic secret scanner redacts keys and tokens, while lockfiles (`package-lock.json`, `pnpm-lock.yaml`, etc.) and minified bundles are automatically excluded.
+
+---
 
 <p align="center">
-  <img src="docs/images/context-menu-demo.png" alt="Right-Click to Generate AI Prompt in VS Code" width="520" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+  <img src="docs/images/context-menu-demo.png" alt="Right-Click to Generate AI Prompt in VS Code" width="560" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
 </p>
 
 ### How to Use

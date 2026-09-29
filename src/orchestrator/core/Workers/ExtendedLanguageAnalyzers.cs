@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -6,11 +7,24 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Workspace;
 
 namespace AiPromptContextBuilder.Core.Workers;
 
 public static class ExtendedLanguageAnalyzers
 {
+    private static readonly ConcurrentDictionary<string, (DateTime CachedAt, WorkspaceFileIndex Index)> _indexCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public static WorkspaceFileIndex GetWorkspaceIndex(string workspaceRoot)
+    {
+        if (_indexCache.TryGetValue(workspaceRoot, out var cached) && (DateTime.UtcNow - cached.CachedAt).TotalSeconds < 10)
+        {
+            return cached.Index;
+        }
+        var fresh = new WorkspaceFileIndex(workspaceRoot);
+        _indexCache[workspaceRoot] = (DateTime.UtcNow, fresh);
+        return fresh;
+    }
     // ==========================================
     // 1. RUST ANALYZER (.rs)
     // ==========================================
@@ -24,6 +38,8 @@ public static class ExtendedLanguageAnalyzers
         var queue = new Queue<string>();
         queue.Enqueue(normalizedRoot);
         visited.Add(normalizedRoot);
+
+        var wsIndex = GetWorkspaceIndex(workspaceRoot);
 
         while (queue.Count > 0)
         {
@@ -77,8 +93,8 @@ public static class ExtendedLanguageAnalyzers
                 {
                     if (seg is "crate" or "super" or "self") continue;
 
-                    var localFiles = Directory.GetFiles(workspaceRoot, $"{seg}.rs", SearchOption.AllDirectories);
-                    if (localFiles.Length > 0)
+                    var localFiles = wsIndex.FindFilesByName($"{seg}.rs");
+                    if (localFiles.Count > 0)
                     {
                         foreach (var lf in localFiles)
                         {
@@ -98,10 +114,10 @@ public static class ExtendedLanguageAnalyzers
 
                 foreach (var name in new[] { traitName, structName })
                 {
-                    var matching = Directory.GetFiles(workspaceRoot, $"{name.ToLowerInvariant()}.rs", SearchOption.AllDirectories);
-                    if (matching.Length == 0)
+                    var matching = wsIndex.FindFilesByName($"{name.ToLowerInvariant()}.rs");
+                    if (matching.Count == 0)
                     {
-                        matching = Directory.GetFiles(workspaceRoot, $"{name}.rs", SearchOption.AllDirectories);
+                        matching = wsIndex.FindFilesByName($"{name}.rs");
                     }
                     foreach (var mf in matching)
                     {
@@ -121,7 +137,7 @@ public static class ExtendedLanguageAnalyzers
                     if (cleanTrait is "Debug" or "Clone" or "Copy" or "Default" or "PartialEq" or "Eq" or "PartialOrd" or "Ord" or "Hash" or "Serialize" or "Deserialize")
                         continue;
 
-                    var matching = Directory.GetFiles(workspaceRoot, $"{cleanTrait.ToLowerInvariant()}.rs", SearchOption.AllDirectories);
+                    var matching = wsIndex.FindFilesByName($"{cleanTrait.ToLowerInvariant()}.rs");
                     foreach (var mf in matching)
                     {
                         AddEdgeAndQueue(fragment, fileNodeId, mf, RelationshipType.Attribute, workspaceRoot, visited, queue);
@@ -146,6 +162,8 @@ public static class ExtendedLanguageAnalyzers
         var queue = new Queue<string>();
         queue.Enqueue(normalizedRoot);
         visited.Add(normalizedRoot);
+
+        var wsIndex = GetWorkspaceIndex(workspaceRoot);
 
         while (queue.Count > 0)
         {
@@ -178,8 +196,8 @@ public static class ExtendedLanguageAnalyzers
                     string candidate = parts[i];
                     if (string.IsNullOrEmpty(candidate) || candidate == "*") continue;
 
-                    var localFiles = Directory.GetFiles(workspaceRoot, $"{candidate}.kt", SearchOption.AllDirectories);
-                    if (localFiles.Length > 0)
+                    var localFiles = wsIndex.FindFilesByName($"{candidate}.kt");
+                    if (localFiles.Count > 0)
                     {
                         foreach (var lf in localFiles)
                         {
@@ -195,7 +213,7 @@ public static class ExtendedLanguageAnalyzers
             foreach (Match ed in extDefMatches)
             {
                 string targetType = ed.Groups[1].Value;
-                var matching = Directory.GetFiles(workspaceRoot, $"{targetType}.kt", SearchOption.AllDirectories);
+                var matching = wsIndex.FindFilesByName($"{targetType}.kt");
                 foreach (var mf in matching)
                 {
                     AddEdgeAndQueue(fragment, fileNodeId, mf, RelationshipType.ExtensionMethod, workspaceRoot, visited, queue);
@@ -211,7 +229,7 @@ public static class ExtendedLanguageAnalyzers
                 foreach (Match bp in baseParts)
                 {
                     string baseName = bp.Groups[1].Value;
-                    var matching = Directory.GetFiles(workspaceRoot, $"{baseName}.kt", SearchOption.AllDirectories);
+                    var matching = wsIndex.FindFilesByName($"{baseName}.kt");
                     foreach (var mf in matching)
                     {
                         AddEdgeAndQueue(fragment, fileNodeId, mf, RelationshipType.Implementation, workspaceRoot, visited, queue);
@@ -236,6 +254,8 @@ public static class ExtendedLanguageAnalyzers
         var queue = new Queue<string>();
         queue.Enqueue(normalizedRoot);
         visited.Add(normalizedRoot);
+
+        var wsIndex = GetWorkspaceIndex(workspaceRoot);
 
         while (queue.Count > 0)
         {
@@ -265,7 +285,7 @@ public static class ExtendedLanguageAnalyzers
                 string className = fullNamespace.Split('\\').Last();
                 if (string.IsNullOrEmpty(className)) continue;
 
-                var localFiles = Directory.GetFiles(workspaceRoot, $"{className}.php", SearchOption.AllDirectories);
+                var localFiles = wsIndex.FindFilesByName($"{className}.php");
                 foreach (var lf in localFiles)
                 {
                     AddEdgeAndQueue(fragment, fileNodeId, lf, RelationshipType.Import, workspaceRoot, visited, queue);
@@ -279,7 +299,7 @@ public static class ExtendedLanguageAnalyzers
                 if (cm.Groups[2].Success)
                 {
                     string baseClass = cm.Groups[2].Value;
-                    var localFiles = Directory.GetFiles(workspaceRoot, $"{baseClass}.php", SearchOption.AllDirectories);
+                    var localFiles = wsIndex.FindFilesByName($"{baseClass}.php");
                     foreach (var lf in localFiles)
                     {
                         AddEdgeAndQueue(fragment, fileNodeId, lf, RelationshipType.BaseType, workspaceRoot, visited, queue);
@@ -290,7 +310,7 @@ public static class ExtendedLanguageAnalyzers
                     var interfaces = cm.Groups[3].Value.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries);
                     foreach (var iface in interfaces)
                     {
-                        var localFiles = Directory.GetFiles(workspaceRoot, $"{iface}.php", SearchOption.AllDirectories);
+                        var localFiles = wsIndex.FindFilesByName($"{iface}.php");
                         foreach (var lf in localFiles)
                         {
                             AddEdgeAndQueue(fragment, fileNodeId, lf, RelationshipType.Implementation, workspaceRoot, visited, queue);
@@ -304,7 +324,7 @@ public static class ExtendedLanguageAnalyzers
             foreach (Match am in attrMatches)
             {
                 string attrName = am.Groups[1].Value;
-                var localFiles = Directory.GetFiles(workspaceRoot, $"{attrName}.php", SearchOption.AllDirectories);
+                var localFiles = wsIndex.FindFilesByName($"{attrName}.php");
                 foreach (var lf in localFiles)
                 {
                     AddEdgeAndQueue(fragment, fileNodeId, lf, RelationshipType.Attribute, workspaceRoot, visited, queue);
@@ -316,7 +336,7 @@ public static class ExtendedLanguageAnalyzers
                     foreach (Match cr in classRefs)
                     {
                         string target = cr.Groups[1].Value;
-                        var targetFiles = Directory.GetFiles(workspaceRoot, $"{target}.php", SearchOption.AllDirectories);
+                        var targetFiles = wsIndex.FindFilesByName($"{target}.php");
                         foreach (var tf in targetFiles)
                         {
                             AddEdgeAndQueue(fragment, fileNodeId, tf, RelationshipType.Attribute, workspaceRoot, visited, queue);
@@ -330,7 +350,7 @@ public static class ExtendedLanguageAnalyzers
             foreach (Match vm in viewMatches)
             {
                 string viewName = vm.Groups[1].Value.Replace('.', '/');
-                var bladeCandidates = Directory.GetFiles(workspaceRoot, "*.blade.php", SearchOption.AllDirectories);
+                var bladeCandidates = wsIndex.FindMatchingFiles(f => f.EndsWith(".blade.php", StringComparison.OrdinalIgnoreCase));
                 foreach (var bc in bladeCandidates)
                 {
                     string bcNorm = bc.Replace('\\', '/');
@@ -358,6 +378,8 @@ public static class ExtendedLanguageAnalyzers
         var queue = new Queue<string>();
         queue.Enqueue(normalizedRoot);
         visited.Add(normalizedRoot);
+
+        var wsIndex = GetWorkspaceIndex(workspaceRoot);
 
         while (queue.Count > 0)
         {
@@ -390,7 +412,7 @@ public static class ExtendedLanguageAnalyzers
                 if (importPath.StartsWith("package:"))
                 {
                     string filename = Path.GetFileName(importPath);
-                    var localFiles = Directory.GetFiles(workspaceRoot, filename, SearchOption.AllDirectories);
+                    var localFiles = wsIndex.FindFilesByName(filename);
                     foreach (var lf in localFiles)
                     {
                         AddEdgeAndQueue(fragment, fileNodeId, lf, RelationshipType.Import, workspaceRoot, visited, queue);
@@ -438,7 +460,7 @@ public static class ExtendedLanguageAnalyzers
                     string baseClass = cm.Groups[2].Value;
                     if (baseClass is not "StatelessWidget" and not "StatefulWidget" and not "State" and not "Object")
                     {
-                        var files = Directory.GetFiles(workspaceRoot, $"{baseClass.ToLowerInvariant()}.dart", SearchOption.AllDirectories);
+                        var files = wsIndex.FindFilesByName($"{baseClass.ToLowerInvariant()}.dart");
                         foreach (var f in files)
                         {
                             AddEdgeAndQueue(fragment, fileNodeId, f, RelationshipType.BaseType, workspaceRoot, visited, queue);
@@ -452,7 +474,7 @@ public static class ExtendedLanguageAnalyzers
             foreach (Match em in eventMatches)
             {
                 string eventName = em.Groups[1].Value;
-                var files = Directory.GetFiles(workspaceRoot, "*.dart", SearchOption.AllDirectories);
+                var files = wsIndex.FindMatchingFiles(f => f.EndsWith(".dart", StringComparison.OrdinalIgnoreCase));
                 foreach (var f in files)
                 {
                     if (Path.GetFileNameWithoutExtension(f).Equals(eventName, StringComparison.OrdinalIgnoreCase) ||
@@ -480,6 +502,8 @@ public static class ExtendedLanguageAnalyzers
         var queue = new Queue<string>();
         queue.Enqueue(normalizedRoot);
         visited.Add(normalizedRoot);
+
+        var wsIndex = GetWorkspaceIndex(workspaceRoot);
 
         while (queue.Count > 0)
         {
@@ -545,7 +569,7 @@ public static class ExtendedLanguageAnalyzers
                 else
                 {
                     string incFileName = Path.GetFileName(includeRel);
-                    var matchedFiles = Directory.GetFiles(workspaceRoot, incFileName, SearchOption.AllDirectories);
+                    var matchedFiles = wsIndex.FindFilesByName(incFileName);
                     foreach (var mf in matchedFiles)
                     {
                         AddEdgeAndQueue(fragment, fileNodeId, mf, RelationshipType.Import, workspaceRoot, visited, queue);
@@ -558,7 +582,7 @@ public static class ExtendedLanguageAnalyzers
             foreach (Match inhm in inheritanceMatches)
             {
                 string baseNameRef = inhm.Groups[2].Value;
-                var matched = Directory.GetFiles(workspaceRoot, $"{baseNameRef}.*", SearchOption.AllDirectories);
+                var matched = wsIndex.FindFilesByBaseName(baseNameRef);
                 foreach (var mf in matched)
                 {
                     string mfExt = Path.GetExtension(mf).ToLowerInvariant();

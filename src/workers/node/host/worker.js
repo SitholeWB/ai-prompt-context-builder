@@ -253,10 +253,16 @@ function analyzeJsTsFile(filePath, relPath, content, fileNodeId, nodes, edges, q
             // Find imported file with same name
             const siblingTsx = path.resolve(path.dirname(filePath), `${tag}.tsx`);
             const siblingTs = path.resolve(path.dirname(filePath), `${tag}.ts`);
+            const siblingJsx = path.resolve(path.dirname(filePath), `${tag}.jsx`);
+            const siblingJs = path.resolve(path.dirname(filePath), `${tag}.js`);
             if (fs.existsSync(siblingTsx)) {
               linkAndQueueFile(fileNodeId, siblingTsx, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
+            } else if (fs.existsSync(siblingJsx)) {
+              linkAndQueueFile(fileNodeId, siblingJsx, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
             } else if (fs.existsSync(siblingTs)) {
               linkAndQueueFile(fileNodeId, siblingTs, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
+            } else if (fs.existsSync(siblingJs)) {
+              linkAndQueueFile(fileNodeId, siblingJs, 'ComponentUsage', 'High', 'SyntaxAware', edges, queue, visitedFiles, workspaceRoot);
             }
           }
         }
@@ -464,12 +470,21 @@ function scanPrototypeExtensions(filePath, content, fileNodeId, edges, queue, vi
   }
   if (calledMethods.size === 0) return;
 
+  const ignoredDirs = new Set(['node_modules', '.git', '.vs', '.idea', 'bin', 'obj', 'dist', 'build', 'out', 'target', 'vendor', '.next', '.nuxt', '.turbo', 'coverage', '.dart_tool']);
+  
+  if (!global.__candidatesCache) {
+    global.__candidatesCache = new Map();
+  }
+
   function findCandidates(dir) {
+    if (global.__candidatesCache.has(dir)) {
+      return global.__candidatesCache.get(dir);
+    }
     let results = [];
     try {
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'bin' || entry.name === 'obj') continue;
+        if (entry.name.startsWith('.') || ignoredDirs.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           results = results.concat(findCandidates(full));
@@ -482,6 +497,7 @@ function scanPrototypeExtensions(filePath, content, fileNodeId, edges, queue, vi
         }
       }
     } catch {}
+    global.__candidatesCache.set(dir, results);
     return results;
   }
 

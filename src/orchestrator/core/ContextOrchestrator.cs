@@ -75,6 +75,7 @@ public class ContextOrchestrator
 
     public async Task<OrchestrationResult> GenerateContextAsync(
         UserConfiguration config,
+        Action<int, string>? progressCallback = null,
         CancellationToken cancellationToken = default)
     {
         string rootFullPath = Path.GetFullPath(config.RootPath);
@@ -87,6 +88,8 @@ public class ContextOrchestrator
                 ErrorMessage = $"Target root file not found: {config.RootPath}"
             };
         }
+
+        progressCallback?.Invoke(10, "Discovering workspace boundaries & security validation");
 
         // 1. Workspace Discovery
         var discoveredWs = WorkspaceDiscovery.Discover(rootFullPath, config.WorkspacePath, config.ProjectPath);
@@ -118,11 +121,15 @@ public class ContextOrchestrator
         var allWarnings = new List<string>();
         var allDiagnostics = new List<Diagnostic>();
 
+        progressCallback?.Invoke(25, $"Analyzing {detectedLang} dependencies: {Path.GetFileName(rootFullPath)}");
+
         // 4. Initial Worker Analysis
         var initialFragment = await AnalyzeWithAdapterAsync(rootFullPath, wsRoot, detectedLang, config, cancellationToken);
         graph.MergeFragment(initialFragment);
         allWarnings.AddRange(initialFragment.Warnings);
         allDiagnostics.AddRange(initialFragment.Diagnostics);
+
+        progressCallback?.Invoke(50, "Traversing dependency graph across languages");
 
         // 5. Cross-Language Traversal
         var visitedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootFullPath };
@@ -194,6 +201,8 @@ public class ContextOrchestrator
         // 7. Importance Scoring
         ImportanceScorer.CalculateScores(graph, rootTarget.RootNodeId);
 
+        progressCallback?.Invoke(70, "Calculating importance scores & secret scanning");
+
         // 8. Filters & Secret Scanning
         var candidateFiles = new List<EvaluatedFile>();
         var excludedFiles = new List<EvaluatedFile>();
@@ -249,9 +258,13 @@ public class ContextOrchestrator
             }
         }
 
+        progressCallback?.Invoke(85, "Applying comment stripping & token budget");
+
         // 9. Token Budget Selection
         var budgetResult = TokenBudgetSelector.SelectFiles(candidateFiles, graph, config, _tokenEstimator);
         var totalExcluded = excludedFiles.Concat(budgetResult.ExcludedFiles).ToList();
+
+        progressCallback?.Invoke(95, "Generating authoritative Markdown context");
 
         // 10. Generate Markdown
         var metadata = new MarkdownGenerationMetadata
@@ -285,6 +298,8 @@ public class ContextOrchestrator
             }
             File.WriteAllText(finalOutputPath, markdown);
         }
+
+        progressCallback?.Invoke(100, "Context generated successfully");
 
         return new OrchestrationResult
         {

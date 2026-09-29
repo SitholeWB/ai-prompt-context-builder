@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Workspace;
 using ProtocolDiagnostic = AiPromptContextBuilder.Core.Protocol.Diagnostic;
 using ProtocolSeverity = AiPromptContextBuilder.Core.Protocol.DiagnosticSeverity;
 
@@ -22,6 +23,7 @@ public class ExtensionMethodInfo
 
 public class DotNetAnalyzer
 {
+    private WorkspaceFileIndex? _wsIndex;
     public DependencyGraphFragment Analyze(
         string rootFilePath,
         string workspaceRoot,
@@ -49,19 +51,12 @@ public class DotNetAnalyzer
         filesToAnalyze.Enqueue(normalizedRoot);
         visitedFiles.Add(normalizedRoot);
 
-        // Map of type name to declaring file paths for project-level symbol resolution
-        var workspaceFiles = Directory.Exists(workspaceRoot)
-            ? Directory.GetFiles(workspaceRoot, "*.*", SearchOption.AllDirectories)
-                .Where(f =>
-                {
-                    string fExt = Path.GetExtension(f).ToLowerInvariant();
-                    if (fExt is not (".cs" or ".razor" or ".cshtml")) return false;
-                    string norm = f.Replace('\\', '/');
-                    return !norm.Contains("/bin/") && !norm.Contains("/obj/") &&
-                           !norm.Contains("/.git/") && !norm.Contains("/.vs/");
-                })
-                .ToList()
-            : new List<string> { normalizedRoot };
+        _wsIndex = new WorkspaceFileIndex(workspaceRoot);
+        var workspaceFiles = _wsIndex.FindMatchingFiles(f =>
+        {
+            string ext = Path.GetExtension(f).ToLowerInvariant();
+            return ext is ".cs" or ".razor" or ".cshtml";
+        }).ToList();
 
         var typeToFileIndex = BuildTypeToFileIndex(workspaceFiles, workspaceRoot);
         var extensionMethodIndex = BuildExtensionMethodIndex(workspaceFiles, workspaceRoot);
@@ -1050,12 +1045,12 @@ public class DotNetAnalyzer
         string razor = Path.Combine(workspaceRoot, $"{typeName}.razor");
         if (File.Exists(razor)) return razor;
 
-        if (Directory.Exists(workspaceRoot))
+        if (_wsIndex != null)
         {
-            var matchCs = Directory.GetFiles(workspaceRoot, $"{typeName}.cs", SearchOption.AllDirectories).FirstOrDefault();
+            var matchCs = _wsIndex.FindFilesByName($"{typeName}.cs").FirstOrDefault();
             if (matchCs != null) return matchCs;
 
-            var matchRazor = Directory.GetFiles(workspaceRoot, $"{typeName}.razor", SearchOption.AllDirectories).FirstOrDefault();
+            var matchRazor = _wsIndex.FindFilesByName($"{typeName}.razor").FirstOrDefault();
             if (matchRazor != null) return matchRazor;
         }
 

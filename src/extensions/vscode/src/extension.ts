@@ -399,34 +399,23 @@ interface RunOptions {
 }
 
 async function runGeneration(filePath: string, options: RunOptions) {
-  const phases = [
-    'Detecting workspace',
-    'Detecting language',
-    'Starting analyser',
-    'Loading project',
-    'Resolving root',
-    'Building dependency graph',
-    'Enhancing framework context',
-    'Reading source files',
-    'Applying comment policy',
-    'Applying token budget',
-    'Writing Markdown',
-  ];
-
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Generating AI Prompt & Context...',
+      title: 'AI Prompt Context Builder',
       cancellable: true,
     },
     async (progress, token) => {
-      let currentPhase = 0;
-      const interval = setInterval(() => {
-        if (currentPhase < phases.length) {
-          progress.report({ message: phases[currentPhase], increment: 100 / phases.length });
-          currentPhase++;
+      let currentPercent = 5;
+      progress.report({ message: '(5%) Initializing analyzers...', increment: 5 });
+
+      // Smooth background ticker to keep progress active between phases
+      const ticker = setInterval(() => {
+        if (currentPercent < 92) {
+          currentPercent += 2;
+          progress.report({ increment: 2 });
         }
-      }, 250);
+      }, 600);
 
       const args = ['generate', '--file', filePath, '--format', 'json'];
       if (options.symbol) args.push('--symbol', options.symbol);
@@ -442,7 +431,7 @@ async function runGeneration(filePath: string, options: RunOptions) {
 
       token.onCancellationRequested(() => {
         child.kill();
-        clearInterval(interval);
+        clearInterval(ticker);
         outputChannel.appendLine('Prompt generation cancelled by user.');
       });
 
@@ -450,18 +439,34 @@ async function runGeneration(filePath: string, options: RunOptions) {
       let stderr = '';
 
       child.stdout.on('data', (d) => { stdout += d.toString(); });
-      child.stderr.on('data', (d) => { stderr += d.toString(); });
+      child.stderr.on('data', (d) => {
+        const text = d.toString();
+        stderr += text;
+
+        // Parse PROGRESS: XX% - Message
+        const progressRegex = /PROGRESS:\s*(\d+)%\s*-\s*([^\r\n]+)/g;
+        let match;
+        while ((match = progressRegex.exec(text)) !== null) {
+          const targetPercent = parseInt(match[1], 10);
+          const phaseName = match[2].trim();
+          const increment = Math.max(0, targetPercent - currentPercent);
+          currentPercent = targetPercent;
+          progress.report({ message: `(${targetPercent}%) ${phaseName}`, increment });
+        }
+      });
 
       await new Promise<void>((resolve, reject) => {
         child.on('error', async (err) => {
-          clearInterval(interval);
+          clearInterval(ticker);
           outputChannel.appendLine(`Failed to launch process '${spec.command}': ${err.message}`);
           await handleMissingRuntime(spec.command, err);
           reject(err);
         });
 
         child.on('close', (code) => {
-          clearInterval(interval);
+          clearInterval(ticker);
+          progress.report({ message: '(100%) Complete!', increment: Math.max(0, 100 - currentPercent) });
+
           if (code === 0) {
             try {
               const res = JSON.parse(stdout);

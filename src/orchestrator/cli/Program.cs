@@ -29,7 +29,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.8");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.0.9");
             return 0;
         }
 
@@ -240,7 +240,10 @@ public class Program
         var orchestrator = new ContextOrchestrator();
         orchestrator.RegisterAdapter(new DotNetAdapter());
 
-        var result = await orchestrator.GenerateContextAsync(config);
+        var result = await orchestrator.GenerateContextAsync(config, (percent, msg) =>
+        {
+            Console.Error.WriteLine($"PROGRESS: {percent}% - {msg}");
+        });
 
         if (!result.Success)
         {
@@ -321,7 +324,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.8
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.9
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
