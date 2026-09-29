@@ -29,7 +29,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.6");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.0.7");
             return 0;
         }
 
@@ -136,6 +136,9 @@ public class Program
                     break;
                 case "--include-implementations":
                     config.IncludeImplementations = ParseBool(NextVal());
+                    break;
+                case "--include-events" or "--include-subscribers":
+                    config.IncludeEventSubscribers = ParseBool(NextVal());
                     break;
                 case "--include-companions":
                     config.IncludeCompanionFiles = ParseBool(NextVal());
@@ -313,7 +316,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.5
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.7
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
@@ -338,9 +341,11 @@ Options:
   --task <text>                  Custom prompt task heading
   --include-tests <bool>         Include test files (default: false)
   --include-generated <bool>     Include generated files (default: false)
-  --include-attributes <bool>    Include attributes/decorators (default: false)
+  --include-attributes <bool>    Include attributes/decorators (default: true)
+  --include-implementations <bool> Include interface implementations via DI (default: true)
+  --include-subscribers <bool>   Include event subscribers / domain handlers (default: true)
   --include-companions <bool>    Include companion templates/styles (default: true)
-  --include-config <bool>        Include configuration files (default: true)
+  --include-config <bool>        Include configuration files (default: false)
   --save <bool>                  Write result to file (default: true)
   --copy <bool>                  Copy result to clipboard (default: false)
   --format text|json             Output format (default: text)

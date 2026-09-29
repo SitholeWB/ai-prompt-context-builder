@@ -195,6 +195,36 @@ public static class BuiltInSyntaxAnalyzer
                     }
                 }
             }
+
+            // 6. Python Decorators & Event Receivers (@receiver, @event_handler, @task, @decorator)
+            var pyDecMatches = Regex.Matches(content, @"@([A-Za-z0-9_.]+)(?:\(([^)]*)\))?");
+            foreach (Match dm in pyDecMatches)
+            {
+                string decFullName = dm.Groups[1].Value;
+                string decName = decFullName.Split('.').Last();
+                if (decName is not ("property" or "classmethod" or "staticmethod" or "abstractmethod" or "override"))
+                {
+                    string? target = ResolvePythonModule(workspaceRoot, Path.GetDirectoryName(curFile)!, decName);
+                    if (target != null && File.Exists(target))
+                    {
+                        LinkAndQueue(fileNodeId, target, RelationshipType.Decorator, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+
+                if (dm.Groups[2].Success)
+                {
+                    var senderMatch = Regex.Match(dm.Groups[2].Value, @"(?:sender|model)\s*=\s*([A-Za-z0-9_]+)");
+                    if (senderMatch.Success)
+                    {
+                        string senderName = senderMatch.Groups[1].Value;
+                        string? senderTarget = ResolvePythonModule(workspaceRoot, Path.GetDirectoryName(curFile)!, senderName);
+                        if (senderTarget != null && File.Exists(senderTarget))
+                        {
+                            LinkAndQueue(fileNodeId, senderTarget, RelationshipType.EventType, fragment, queue, visited, workspaceRoot);
+                        }
+                    }
+                }
+            }
         }
 
         return fragment;
@@ -348,6 +378,47 @@ public static class BuiltInSyntaxAnalyzer
                     }
                 }
                 catch { }
+            }
+        }
+
+        // 7. Decorators & Decorator Arguments (NestJS, Angular, TypeScript)
+        var decMatches = Regex.Matches(content, @"@([A-Za-z0-9_]+)(?:\(([^)]*)\))?");
+        foreach (Match dm in decMatches)
+        {
+            string decName = dm.Groups[1].Value;
+            string? decFile = ResolveLocalSymbolFile(workspaceRoot, dir, decName);
+            if (decFile != null)
+            {
+                LinkAndQueue(fileNodeId, decFile, RelationshipType.Decorator, fragment, queue, visited, workspaceRoot);
+            }
+
+            if (dm.Groups[2].Success)
+            {
+                var argIdents = Regex.Matches(dm.Groups[2].Value, @"\b([A-Z][A-Za-z0-9_]+)\b");
+                foreach (Match ai in argIdents)
+                {
+                    string targetName = ai.Groups[1].Value;
+                    string? targetFile = ResolveLocalSymbolFile(workspaceRoot, dir, targetName);
+                    if (targetFile != null)
+                    {
+                        LinkAndQueue(fileNodeId, targetFile, RelationshipType.Decorator, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+            }
+        }
+
+        // 8. Interface implementations (class Foo implements IFoo)
+        var implMatches = Regex.Matches(content, @"\bimplements\s+([A-Za-z0-9_,\s]+)");
+        foreach (Match im in implMatches)
+        {
+            var ifaces = im.Groups[1].Value.Split(',').Select(s => s.Trim());
+            foreach (var iface in ifaces)
+            {
+                string? targetFile = ResolveLocalSymbolFile(workspaceRoot, dir, iface);
+                if (targetFile != null)
+                {
+                    LinkAndQueue(fileNodeId, targetFile, RelationshipType.Interface, fragment, queue, visited, workspaceRoot);
+                }
             }
         }
     }
@@ -554,5 +625,33 @@ public static class BuiltInSyntaxAnalyzer
         {
             queue.Enqueue(targetFile);
         }
+    }
+
+    private static string? ResolveLocalSymbolFile(string workspaceRoot, string currentDir, string symbolName)
+    {
+        if (string.IsNullOrWhiteSpace(symbolName)) return null;
+        string[] exts = { ".ts", ".tsx", ".js", ".jsx" };
+        foreach (var ext in exts)
+        {
+            string localPath = Path.Combine(currentDir, symbolName + ext);
+            if (File.Exists(localPath)) return localPath;
+        }
+
+        try
+        {
+            foreach (var ext in exts)
+            {
+                var matches = Directory.GetFiles(workspaceRoot, symbolName + ext, SearchOption.AllDirectories);
+                var valid = matches.FirstOrDefault(m =>
+                {
+                    string norm = m.Replace('\\', '/');
+                    return !norm.Contains("/node_modules/") && !norm.Contains("/dist/") && !norm.Contains("/build/") && !norm.Contains("/.git/");
+                });
+                if (valid != null) return valid;
+            }
+        }
+        catch { }
+
+        return null;
     }
 }

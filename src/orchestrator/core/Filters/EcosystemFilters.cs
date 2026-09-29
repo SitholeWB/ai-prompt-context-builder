@@ -15,18 +15,27 @@ public class FilterEvaluation
 
 public static class EcosystemFilters
 {
+    private static readonly HashSet<string> ExcludedToolchainAndLockFiles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "cargo.lock",
+        "packages.lock.json", "poetry.lock", "composer.lock", "gemfile.lock",
+        "tsconfig.json", "tsconfig.node.json", "tsconfig.app.json", "jsconfig.json",
+        ".eslintrc.json", ".eslintrc.js", ".prettierrc", ".editorconfig",
+        "bun.lockb"
+    };
+
     private static readonly string[] GeneratedDirs = new[]
     {
         "/obj/", "/bin/", "/dist/", "/build/", "/out/", "/coverage/",
         "/target/", "/target/generated-sources/", "/build/generated/",
-        "/__pycache__/", "/.next/", "/.nuxt/"
+        "/__pycache__/", "/.next/", "/.nuxt/", "/.turbo/", "/migrations/"
     };
 
     private static readonly string[] GeneratedSuffixes = new[]
     {
         ".g.cs", ".g.vb", ".generated.cs", ".generated.vb",
         ".designer.cs", ".designer.vb", ".generated.ts", ".generated.js",
-        ".min.js", ".min.css", ".map"
+        ".min.js", ".min.css", ".map", ".bundle.js", ".chunk.js"
     };
 
     private static readonly string[] TestDirs = new[]
@@ -53,6 +62,10 @@ public static class EcosystemFilters
     {
         string normalized = relativePath.Replace('\\', '/');
         string lower = normalized.ToLowerInvariant();
+        string fileName = Path.GetFileName(normalized);
+
+        if (ExcludedToolchainAndLockFiles.Contains(fileName))
+            return true;
 
         if (GeneratedDirs.Any(d => lower.Contains(d) || lower.StartsWith(d.TrimStart('/'))))
             return true;

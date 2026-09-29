@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using AiPromptContextBuilder.Core;
 using AiPromptContextBuilder.Core.Budget;
 using AiPromptContextBuilder.Core.Comments;
+using AiPromptContextBuilder.Core.Filters;
 using AiPromptContextBuilder.Core.Graph;
 using AiPromptContextBuilder.Core.Markdown;
 using AiPromptContextBuilder.Core.Protocol;
@@ -53,6 +54,11 @@ public class Program
         await RunTestAsync("24. Java Static / Extension Imports: Method Resolution to Declaring Class", TestJavaStaticAndExtensionMethods);
         await RunTestAsync("25. TypeScript / JavaScript Prototype Extensions: Dynamic Method Augmentation", TestJsTsPrototypeExtensions);
         await RunTestAsync("26. Python Helpers & Extensions: Module Resolution & Mixins", TestPythonHelpersAndExtensions);
+        await RunTestAsync("27. C# Partial Classes: Sibling Partial Declaration Discovery", TestDotNetPartialClasses);
+        await RunTestAsync("28. Dependency Injection: Interface to Concrete Implementation Resolution", TestDotNetInterfaceImplementations);
+        await RunTestAsync("29. Event Subscribers & CQRS: Command / Event Handler Traversal", TestDotNetEventSubscribersAndCQRS);
+        await RunTestAsync("30. Class Attributes & Decorators: typeof Filter Parameter Resolution", TestDotNetAttributesAndTypeofFilters);
+        RunTest("31. Noise & Toolchain Filtering: Lockfiles & Config Exclusion", TestLockFilesAndToolchainConfigsExcluded);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -559,6 +565,89 @@ public class Program
         Assert(res.Success, $"Python helper/extension orchestration succeeded: {res.ErrorMessage}");
         Assert(res.GeneratedMarkdown!.Contains("helpers.py"), "helpers.py included in context");
         Assert(res.GeneratedMarkdown.Contains("to_slug"), "to_slug function present in context");
+    }
+
+    private static async Task TestDotNetPartialClasses()
+    {
+        string root = ResolveFixture("tests/fixtures/dotnet/OrderService.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
+        var analyzer = new DotNetAnalyzer();
+        var fragment = analyzer.Analyze(root, ws, new UserConfiguration());
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("OrderService.cs")), "OrderService.cs discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("OrderService.Validation.cs")), "OrderService.Validation.cs discovered as companion partial");
+        Assert(fragment.Edges.Any(e => e.Relationship == RelationshipType.PartialDeclaration), "PartialDeclaration edge recorded");
+    }
+
+    private static async Task TestDotNetInterfaceImplementations()
+    {
+        string root = ResolveFixture("tests/fixtures/dotnet/OrderController.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
+        var orchestrator = new ContextOrchestrator();
+        orchestrator.RegisterAdapter(new DotNetAdapter());
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.CSharp,
+            IncludeImplementations = true,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"DI orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("IOrderRepository.cs"), "IOrderRepository.cs included");
+        Assert(res.GeneratedMarkdown.Contains("OrderRepository.cs"), "OrderRepository.cs implementation included via DI");
+    }
+
+    private static async Task TestDotNetEventSubscribersAndCQRS()
+    {
+        string root = ResolveFixture("tests/fixtures/dotnet/OrderCheckoutService.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
+        var orchestrator = new ContextOrchestrator();
+        orchestrator.RegisterAdapter(new DotNetAdapter());
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.CSharp,
+            IncludeEventSubscribers = true,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Event subscriber orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("CreateOrderCommand.cs"), "CreateOrderCommand.cs included");
+        Assert(res.GeneratedMarkdown.Contains("CreateOrderCommandHandler.cs"), "CreateOrderCommandHandler.cs included via event subscription");
+    }
+
+    private static async Task TestDotNetAttributesAndTypeofFilters()
+    {
+        string root = ResolveFixture("tests/fixtures/dotnet/CheckoutController.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
+        var orchestrator = new ContextOrchestrator();
+        orchestrator.RegisterAdapter(new DotNetAdapter());
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.CSharp,
+            IncludeAttributes = true,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Attribute orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("AuditFilter.cs"), "AuditFilter.cs included via typeof(AuditFilter) attribute argument");
+    }
+
+    private static void TestLockFilesAndToolchainConfigsExcluded()
+    {
+        Assert(EcosystemFilters.IsGeneratedFile("package-lock.json"), "package-lock.json is excluded as generated/toolchain");
+        Assert(EcosystemFilters.IsGeneratedFile("pnpm-lock.yaml"), "pnpm-lock.yaml is excluded as lockfile");
+        Assert(EcosystemFilters.IsGeneratedFile("yarn.lock"), "yarn.lock is excluded as lockfile");
+        Assert(EcosystemFilters.IsGeneratedFile("tsconfig.json"), "tsconfig.json is excluded as toolchain config");
+        Assert(EcosystemFilters.IsConfigFile("tsconfig.json"), "tsconfig.json is identified as config file");
     }
 
     private static void Assert(bool condition, string message)

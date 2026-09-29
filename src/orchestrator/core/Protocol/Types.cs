@@ -282,11 +282,12 @@ public class UserConfiguration
 
     public bool IncludeTests { get; set; } = false;
     public bool IncludeGeneratedFiles { get; set; } = false;
-    public bool IncludeAttributes { get; set; } = false;
-    public bool IncludeImplementations { get; set; } = false;
+    public bool IncludeAttributes { get; set; } = true;
+    public bool IncludeImplementations { get; set; } = true;
+    public bool IncludeEventSubscribers { get; set; } = true;
     public bool IncludeCompanionFiles { get; set; } = true;
     public bool IncludeAssets { get; set; } = false;
-    public bool IncludeConfigurationFiles { get; set; } = true;
+    public bool IncludeConfigurationFiles { get; set; } = false;
     public bool IncludeMetadataDependenciesInTree { get; set; } = true;
     public bool IncludeDependencyTree { get; set; } = true;
     public bool IncludeExcludedFileList { get; set; } = true;

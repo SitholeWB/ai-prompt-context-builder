@@ -170,6 +170,84 @@ public static class JavaGoAnalyzer
                 }
             }
 
+            // 5. Interface implementations (Dependency Injection)
+            var implementsMatches = Regex.Matches(content, @"\bimplements\s+([A-Za-z0-9_,\s]+)");
+            foreach (Match im in implementsMatches)
+            {
+                var ifaces = im.Groups[1].Value.Split(',').Select(s => s.Trim());
+                foreach (var iface in ifaces)
+                {
+                    if (string.IsNullOrEmpty(iface)) continue;
+                    var ifaceFiles = Directory.GetFiles(workspaceRoot, $"{iface}.java", SearchOption.AllDirectories);
+                    foreach (var f in ifaceFiles)
+                    {
+                        LinkJavaFile(fileNodeId, f, RelationshipType.Interface, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+            }
+
+            // Look for *Impl.java files for referenced interfaces
+            var referencedTypes = Regex.Matches(content, @"\b([A-Z][A-Za-z0-9_]+)\b");
+            foreach (Match rt in referencedTypes)
+            {
+                string tName = rt.Groups[1].Value;
+                var implFiles = Directory.GetFiles(workspaceRoot, $"{tName}Impl.java", SearchOption.AllDirectories);
+                foreach (var f in implFiles)
+                {
+                    LinkJavaFile(fileNodeId, f, RelationshipType.Implementation, fragment, queue, visited, workspaceRoot);
+                }
+            }
+
+            // 6. Spring Event Listeners & Event Subscribers (@EventListener, @KafkaListener, @RabbitListener)
+            var eventListenerMatches = Regex.Matches(content, @"@(?:EventListener|TransactionalEventListener|KafkaListener|RabbitListener)(?:\s*\(\s*(?:value\s*=\s*)?\{?([A-Za-z0-9_]+)\.class)?");
+            foreach (Match elm in eventListenerMatches)
+            {
+                if (elm.Groups[1].Success)
+                {
+                    string eventClass = elm.Groups[1].Value;
+                    var eventFiles = Directory.GetFiles(workspaceRoot, $"{eventClass}.java", SearchOption.AllDirectories);
+                    foreach (var ef in eventFiles)
+                    {
+                        LinkJavaFile(fileNodeId, ef, RelationshipType.EventType, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+            }
+
+            var eventMethodMatches = Regex.Matches(content, @"\b(?:on|handle|consume|listen|process)\s*\(\s*([A-Za-z0-9_]+(?:Event|Command|Notification|Message))\b");
+            foreach (Match emm in eventMethodMatches)
+            {
+                string eventClass = emm.Groups[1].Value;
+                var eventFiles = Directory.GetFiles(workspaceRoot, $"{eventClass}.java", SearchOption.AllDirectories);
+                foreach (var ef in eventFiles)
+                {
+                    LinkJavaFile(fileNodeId, ef, RelationshipType.EventType, fragment, queue, visited, workspaceRoot);
+                }
+            }
+
+            // 7. Annotations (@Annotation or @Annotation(Target.class))
+            var annotationMatches = Regex.Matches(content, @"@([A-Z][A-Za-z0-9_]+)(?:\s*\(\s*(?:value\s*=\s*)?\{?([A-Za-z0-9_]+)\.class)?");
+            foreach (Match am in annotationMatches)
+            {
+                string annoName = am.Groups[1].Value;
+                if (annoName is not ("Override" or "Deprecated" or "SuppressWarnings" or "Nullable" or "NonNull" or "Test"))
+                {
+                    var annoFiles = Directory.GetFiles(workspaceRoot, $"{annoName}.java", SearchOption.AllDirectories);
+                    foreach (var af in annoFiles)
+                    {
+                        LinkJavaFile(fileNodeId, af, RelationshipType.Annotation, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+                if (am.Groups[2].Success)
+                {
+                    string targetClass = am.Groups[2].Value;
+                    var targetFiles = Directory.GetFiles(workspaceRoot, $"{targetClass}.java", SearchOption.AllDirectories);
+                    foreach (var tf in targetFiles)
+                    {
+                        LinkJavaFile(fileNodeId, tf, RelationshipType.Annotation, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+            }
+
             // Discovered classes/interfaces
             var typeMatches = Regex.Matches(content, @"\b(?:class|interface|record|enum)\s+([A-Za-z0-9_]+)");
             foreach (Match m in typeMatches)
@@ -190,6 +268,31 @@ public static class JavaGoAnalyzer
         }
 
         return fragment;
+    }
+
+    private static void LinkJavaFile(
+        string sourceNodeId,
+        string targetFile,
+        RelationshipType relationship,
+        DependencyGraphFragment fragment,
+        Queue<string> queue,
+        HashSet<string> visited,
+        string workspaceRoot)
+    {
+        string targetRel = Path.GetRelativePath(workspaceRoot, targetFile).Replace('\\', '/');
+        string targetNodeId = $"file:{targetRel}";
+        if (!fragment.Edges.Any(e => e.SourceNodeId == sourceNodeId && e.TargetNodeId == targetNodeId && e.Relationship == relationship))
+        {
+            fragment.Edges.Add(new GraphEdge
+            {
+                SourceNodeId = sourceNodeId,
+                TargetNodeId = targetNodeId,
+                Relationship = relationship,
+                Confidence = Confidence.High,
+                AnalysisLevel = CapabilityLevel.SyntaxAware
+            });
+        }
+        if (visited.Add(targetFile)) queue.Enqueue(targetFile);
     }
 
     public static DependencyGraphFragment AnalyzeGo(string rootPath, string workspaceRoot)

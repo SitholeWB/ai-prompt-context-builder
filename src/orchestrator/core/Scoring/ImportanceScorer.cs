@@ -99,7 +99,7 @@ public static class ImportanceScorer
     {
         RelationshipType.Root => w.RootFile,
         RelationshipType.Template => w.FrameworkTemplate,
-        RelationshipType.CodeBehind => w.FrameworkCodeBehind,
+        RelationshipType.CodeBehind or RelationshipType.PartialDeclaration => w.FrameworkCodeBehind,
         RelationshipType.ConstructorDependency => w.ConstructorDependency,
         RelationshipType.BaseType => w.BaseType,
         RelationshipType.Interface or RelationshipType.Implementation => w.ImplementedInterface,
@@ -107,7 +107,7 @@ public static class ImportanceScorer
         RelationshipType.ParameterType => w.PublicParameterType,
         RelationshipType.ReturnType => w.PublicReturnType,
         RelationshipType.ComponentUsage => w.ComponentUsage,
-        RelationshipType.Service => w.FrameworkService,
+        RelationshipType.Service or RelationshipType.EventType => w.FrameworkService,
         RelationshipType.PropertyType => w.PropertyType,
         RelationshipType.FieldType => w.FieldType,
         RelationshipType.ObjectCreation => w.ObjectCreation,

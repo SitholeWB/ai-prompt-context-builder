@@ -25,7 +25,32 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showErrorMessage('No active file selected to generate AI context.');
       return;
     }
-    await runGeneration(filePath, {});
+
+    const modePick = await vscode.window.showQuickPick(
+      [
+        {
+          label: '$(zap) Export with Defaults',
+          description: 'Instant Generation (Recommended)',
+          detail: 'Full dependency graph, automatic token budget, comments preserved, tools/lockfiles excluded'
+        },
+        {
+          label: '$(gear) Custom Options...',
+          description: 'Step-by-Step Configuration',
+          detail: 'Configure token budget, comment stripping, traversal depth, output destination & custom prompt'
+        }
+      ],
+      {
+        title: `AI Prompt & Context: ${path.basename(filePath)}`,
+        placeHolder: 'Choose export mode: Instant Defaults or Step-by-Step Custom Options'
+      }
+    );
+    if (!modePick) return;
+
+    if (modePick.label.includes('Defaults')) {
+      await runGeneration(filePath, {});
+    } else {
+      await promptAndRunCustomOptions(filePath);
+    }
   });
 
   // 2. Generate from Symbol at Cursor
@@ -61,77 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showErrorMessage('No active file selected.');
       return;
     }
-
-    // Prompt for Token Budget
-    const budgetPick = await vscode.window.showQuickPick(
-      [
-        { label: 'Unlimited', description: 'Include all eligible transitive dependencies' },
-        { label: '32,000', description: '32k token budget' },
-        { label: '64,000', description: '64k token budget' },
-        { label: '100,000', description: '100k token budget' },
-        { label: '128,000', description: '128k token budget' },
-        { label: '200,000', description: '200k token budget' },
-        { label: 'Custom', description: 'Enter specific integer token budget' },
-      ],
-      { title: 'Select Token Budget' }
-    );
-    if (!budgetPick) return;
-
-    let maxTokens: number | undefined;
-    if (budgetPick.label === 'Custom') {
-      const customVal = await vscode.window.showInputBox({ prompt: 'Enter token budget (e.g. 50000)' });
-      if (customVal && parseInt(customVal, 10)) {
-        maxTokens = parseInt(customVal, 10);
-      }
-    } else if (budgetPick.label !== 'Unlimited') {
-      maxTokens = parseInt(budgetPick.label.replace(',', ''), 10);
-    }
-
-    // Prompt for Comment Mode
-    const commentPick = await vscode.window.showQuickPick(
-      [
-        { label: 'Preserve', description: 'Retain original comments' },
-        { label: 'Auto', description: 'Remove comments only if token budget is exceeded' },
-        { label: 'Remove', description: 'Remove comments' },
-      ],
-      { title: 'Select Comment Mode' }
-    );
-    if (!commentPick) return;
-
-    // Prompt for Max Depth
-    const depthPick = await vscode.window.showQuickPick(
-      [
-        { label: 'Unlimited', description: 'Traverse full transitive dependency tree' },
-        { label: '1', description: 'Direct dependencies only' },
-        { label: '2', description: 'Depth 2' },
-        { label: '3', description: 'Depth 3' },
-        { label: '5', description: 'Depth 5' },
-        { label: 'Custom', description: 'Enter custom integer depth' },
-      ],
-      { title: 'Select Maximum Traversal Depth' }
-    );
-    if (!depthPick) return;
-
-    let maxDepth: number | undefined;
-    if (depthPick.label === 'Custom') {
-      const val = await vscode.window.showInputBox({ prompt: 'Enter max traversal depth (integer)' });
-      if (val && parseInt(val, 10)) maxDepth = parseInt(val, 10);
-    } else if (depthPick.label !== 'Unlimited') {
-      maxDepth = parseInt(depthPick.label, 10);
-    }
-
-    // Prompt for Optional Task
-    const taskInput = await vscode.window.showInputBox({
-      prompt: 'Optional: Enter custom refactoring or analysis task for the Markdown prompt',
-      placeHolder: 'e.g. Refactor service to use asynchronous repository calls'
-    });
-
-    await runGeneration(filePath, {
-      maxTokens,
-      commentMode: commentPick.label,
-      maxDepth,
-      task: taskInput,
-    });
+    await promptAndRunCustomOptions(filePath);
   });
 
   // 4. Generate and Copy
@@ -335,6 +290,100 @@ function resolveCommand(extraArgs: string[]): CommandSpec {
     options: { shell: process.platform === 'win32' },
     description: fallback,
   };
+async function promptAndRunCustomOptions(filePath: string) {
+  // Step 1: Token Budget
+  const budgetPick = await vscode.window.showQuickPick(
+    [
+      { label: 'Unlimited', description: 'Include all eligible transitive dependencies (Full context)' },
+      { label: '32,000', description: '32k token budget (Fast / Compact)' },
+      { label: '64,000', description: '64k token budget (Standard Claude / GPT-4)' },
+      { label: '100,000', description: '100k token budget' },
+      { label: '128,000', description: '128k token budget' },
+      { label: '200,000', description: '200k token budget (Large models)' },
+      { label: 'Custom', description: 'Enter specific integer token budget' },
+    ],
+    { title: 'Step 1/5: Select Token Budget' }
+  );
+  if (!budgetPick) return;
+
+  let maxTokens: number | undefined;
+  if (budgetPick.label === 'Custom') {
+    const customVal = await vscode.window.showInputBox({ prompt: 'Enter token budget (e.g. 50000)' });
+    if (customVal && parseInt(customVal, 10)) {
+      maxTokens = parseInt(customVal, 10);
+    }
+  } else if (budgetPick.label !== 'Unlimited') {
+    maxTokens = parseInt(budgetPick.label.replace(',', ''), 10);
+  }
+
+  // Step 2: Comment Mode
+  const commentPick = await vscode.window.showQuickPick(
+    [
+      { label: 'Preserve', description: 'Retain original comments & docstrings (Default)' },
+      { label: 'Auto', description: 'Remove comments only if token budget is exceeded' },
+      { label: 'Remove', description: 'Remove comments to maximize code tokens' },
+    ],
+    { title: 'Step 2/5: Select Comment Mode' }
+  );
+  if (!commentPick) return;
+
+  // Step 3: Traversal Depth
+  const depthPick = await vscode.window.showQuickPick(
+    [
+      { label: 'Unlimited', description: 'Traverse full transitive dependency tree (Default)' },
+      { label: '1', description: 'Direct dependencies only' },
+      { label: '2', description: 'Depth 2 (Direct dependencies + their immediate imports)' },
+      { label: '3', description: 'Depth 3' },
+      { label: '5', description: 'Depth 5' },
+      { label: 'Custom', description: 'Enter custom integer depth' },
+    ],
+    { title: 'Step 3/5: Select Traversal Depth' }
+  );
+  if (!depthPick) return;
+
+  let maxDepth: number | undefined;
+  if (depthPick.label === 'Custom') {
+    const val = await vscode.window.showInputBox({ prompt: 'Enter max traversal depth (integer)' });
+    if (val && parseInt(val, 10)) maxDepth = parseInt(val, 10);
+  } else if (depthPick.label !== 'Unlimited') {
+    maxDepth = parseInt(depthPick.label, 10);
+  }
+
+  // Step 4: Output Destination
+  const destPick = await vscode.window.showQuickPick(
+    [
+      { label: 'Save to File', description: 'Save Markdown in .ai-context/ folder (Default)' },
+      { label: 'Copy to Clipboard', description: 'Copy generated prompt directly to clipboard' },
+      { label: 'Both', description: 'Save to file and copy to clipboard' },
+    ],
+    { title: 'Step 4/5: Select Output Destination' }
+  );
+  if (!destPick) return;
+
+  let saveToFile = true;
+  let copyToClipboard = false;
+  if (destPick.label === 'Copy to Clipboard') {
+    saveToFile = false;
+    copyToClipboard = true;
+  } else if (destPick.label === 'Both') {
+    saveToFile = true;
+    copyToClipboard = true;
+  }
+
+  // Step 5: Optional Custom Task Prompt
+  const taskInput = await vscode.window.showInputBox({
+    prompt: 'Step 5/5: (Optional) Enter custom instructions or goal for the AI prompt',
+    placeHolder: 'e.g. Refactor this service to use asynchronous patterns, or Add unit tests'
+  });
+
+  await runGeneration(filePath, {
+    maxTokens,
+    commentMode: commentPick.label,
+    maxDepth,
+    saveToFile,
+    copyToClipboard,
+    task: taskInput || undefined,
+  });
 }
 
 interface RunOptions {
