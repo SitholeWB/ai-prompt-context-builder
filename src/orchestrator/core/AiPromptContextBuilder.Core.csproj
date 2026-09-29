@@ -7,5 +7,14 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\workers\node\host\worker.js" LogicalName="worker.js" />
+    <EmbeddedResource Include="..\..\workers\python\aicontext\worker.py" LogicalName="worker.py" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\workers\node\host\worker.js" CopyToOutputDirectory="PreserveNewest" Link="workers\node\worker.js" />
+    <None Include="..\..\workers\python\aicontext\worker.py" CopyToOutputDirectory="PreserveNewest" Link="workers\python\worker.py" />
+  </ItemGroup>
 </Project>
 

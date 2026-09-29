@@ -129,23 +129,23 @@ When feeding code to LLMs (Claude, GPT, Gemini, DeepSeek) for refactoring, debug
 
 Every analyzer explicitly discloses its capability level in the generated Markdown metadata:
 
-| Language / File Type | Extensions | Engine / Worker | Capability Level |
-| :--- | :--- | :--- | :--- |
-| **C#** | `.cs` | .NET Roslyn (`Microsoft.CodeAnalysis.CSharp`) | **Semantic** |
-| **Visual Basic .NET** | `.vb` | .NET Roslyn (`Microsoft.CodeAnalysis.VisualBasic`) | **Semantic** |
-| **ASP.NET Core** | `.cs` | Controller, Minimal API & DI Enhancer | **Semantic** |
-| **Blazor & Razor** | `.razor`, `.cshtml` | Scoped CSS & Companion Code-Behind Enhancer | **SyntaxAware + CompanionFile** |
-| **TypeScript** | `.ts`, `.mts`, `.cts` | TypeScript Compiler API 5.9.3 | **Semantic** |
-| **JavaScript** | `.js`, `.mjs`, `.cjs` | TypeScript Compiler API 5.9.3 | **Semantic** |
-| **React** | `.jsx`, `.tsx` | React Component, Hook & Context Enhancer | **Semantic + SyntaxAware** |
-| **Angular** | `.ts`, `.html`, `.scss` | Angular `@Component`, `templateUrl`, `styleUrls` | **Semantic + CompanionFile** |
-| **Vue SFC** | `.vue` | Single-File Component Parser (single file in output) | **SyntaxAware** |
-| **HTML** | `.html`, `.htm` | HTML Syntax Analyzer (scripts, module scripts, styles) | **SyntaxAware** |
-| **CSS, SCSS, Sass** | `.css`, `.scss`, `.sass` | SCSS & Sass Syntax Parser (`@import`, `@use`, partials) | **SyntaxAware** |
-| **Python** | `.py` | Python 3 `ast` & `tokenize` Worker | **Semantic** |
-| **Java** | `.java` | Java Syntax & Maven/Gradle Project Analyzer | **SyntaxAware** |
-| **Go** | `.go` | Go Packages & `go.mod` Syntax Analyzer | **SyntaxAware** |
-| **JSON / YAML Config**| `.json`, `.yaml`, `.yml`| Explicitly Referenced Configuration Analyzer | **ImportGraph** |
+| Language / File Type | Extensions | Primary Engine / Worker | Zero-Config Fallback | Capability Level |
+| :--- | :--- | :--- | :--- | :--- |
+| **C#** | `.cs` | .NET Roslyn (`Microsoft.CodeAnalysis.CSharp`) | Built-in (In-process) | **Semantic** |
+| **Visual Basic .NET** | `.vb` | .NET Roslyn (`Microsoft.CodeAnalysis.VisualBasic`) | Built-in (In-process) | **Semantic** |
+| **ASP.NET Core** | `.cs` | Controller, Minimal API & DI Enhancer | Built-in (In-process) | **Semantic** |
+| **Blazor & Razor** | `.razor`, `.cshtml` | Scoped CSS & Companion Code-Behind Enhancer | Built-in (In-process) | **SyntaxAware + CompanionFile** |
+| **TypeScript** | `.ts`, `.mts`, `.cts` | TypeScript Compiler API 5.9.3 | Built-in Syntax Engine | **Semantic / SyntaxAware** |
+| **JavaScript** | `.js`, `.mjs`, `.cjs` | TypeScript Compiler API 5.9.3 | Built-in Syntax Engine | **Semantic / SyntaxAware** |
+| **React** | `.jsx`, `.tsx` | React Component, Hook & Context Enhancer | Built-in Syntax Engine | **Semantic + SyntaxAware** |
+| **Angular** | `.ts`, `.html`, `.scss` | Angular `@Component`, `templateUrl`, `styleUrls` | Built-in Syntax Engine | **Semantic + CompanionFile** |
+| **Vue SFC** | `.vue` | Single-File Component Parser | Built-in Syntax Engine | **SyntaxAware** |
+| **HTML** | `.html`, `.htm` | HTML Syntax Analyzer (scripts, styles) | Built-in (In-process) | **SyntaxAware** |
+| **CSS, SCSS, Sass** | `.css`, `.scss`, `.sass` | SCSS & Sass Syntax Parser (`@import`, partials) | Built-in (In-process) | **SyntaxAware** |
+| **Python** | `.py` | Python 3 `ast` & `tokenize` Worker | Built-in Syntax Engine | **Semantic / SyntaxAware** |
+| **Java** | `.java` | Java Syntax & Same-Package Type Analyzer | Built-in (In-process) | **SyntaxAware** |
+| **Go** | `.go` | Go Packages & `go.mod` Syntax Analyzer | Built-in (In-process) | **SyntaxAware** |
+| **JSON / YAML Config**| `.json`, `.yaml`, `.yml`| Explicitly Referenced Configuration Analyzer | Built-in (In-process) | **ImportGraph** |
 
 
 ---

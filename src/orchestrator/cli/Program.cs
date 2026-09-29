@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using AiPromptContextBuilder.Core;
 using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Workers;
 using AiPromptContextBuilder.Workers.DotNet;
 
 namespace AiPromptContextBuilder.Cli;
@@ -28,17 +29,52 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.4");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.0.5");
             return 0;
         }
 
         if (args[0] == "check-workers")
         {
             Console.WriteLine("Checking installed workers and language engines...");
-            Console.WriteLine("[x] .NET 10 / Roslyn worker: Active (In-Process)");
-            Console.WriteLine("[x] Node.js worker (TypeScript, React, Angular, Vue, HTML, CSS): Active (node worker.js)");
-            Console.WriteLine("[x] Python worker (AST, tokenize): Active (python3 worker.py)");
-            Console.WriteLine("[x] Java & Go syntax analyzers: Active (In-Process)");
+            Console.WriteLine("  [x] .NET 10 / Roslyn Worker:     Active (In-Process, Full Semantic AST)");
+            Console.WriteLine("  [x] Java & Go Analyzers:          Active (In-Process, Syntax AST)");
+            Console.WriteLine("  [x] HTML/CSS/SCSS Analyzers:      Active (In-Process, Built-in)");
+            
+            // Check Node.js
+            string? nodeExe = WorkerLocator.LocateNodeExecutable();
+            string nodeWorker = WorkerLocator.LocateWorkerScript("worker.js", "src/workers/node/host/worker.js");
+            bool nodeWorkerReady = File.Exists(nodeWorker);
+
+            if (nodeExe != null)
+            {
+                Console.WriteLine($"  [x] Node.js Semantic Worker:      Active ({nodeExe})");
+                Console.WriteLine($"      Worker script:                {(nodeWorkerReady ? "Found" : "Embedded Fallback Ready")} ({nodeWorker})");
+            }
+            else
+            {
+                Console.WriteLine("  [!] Node.js Runtime:              Not detected (External binary)");
+                Console.WriteLine("      Built-in JS/TS/JSX Engine:    Active (Zero-dependency fallback handles React JSX, TSX, JS, Vue, Angular)");
+                Console.WriteLine("      Recommendation:               Install Node.js (https://nodejs.org) to unlock deep semantic type checking.");
+            }
+
+            // Check Python
+            string? pyExe = WorkerLocator.LocatePythonExecutable();
+            string pyWorker = WorkerLocator.LocateWorkerScript("worker.py", "src/workers/python/aicontext/worker.py");
+            bool pyWorkerReady = File.Exists(pyWorker);
+
+            if (pyExe != null)
+            {
+                Console.WriteLine($"  [x] Python Semantic Worker:       Active ({pyExe})");
+                Console.WriteLine($"      Worker script:                {(pyWorkerReady ? "Found" : "Embedded Fallback Ready")} ({pyWorker})");
+            }
+            else
+            {
+                Console.WriteLine("  [!] Python Runtime:               Not detected (External binary)");
+                Console.WriteLine("      Built-in Python Engine:       Active (Zero-dependency fallback handles Python imports and modules)");
+                Console.WriteLine("      Recommendation:               Install Python (https://python.org) to unlock deep AST type resolution.");
+            }
+
+            Console.WriteLine("\nAll languages and frameworks are fully supported and ready for context generation.");
             return 0;
         }
 
@@ -277,7 +313,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.4
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.5
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:

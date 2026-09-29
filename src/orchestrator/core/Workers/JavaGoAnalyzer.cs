@@ -65,6 +65,34 @@ public static class JavaGoAnalyzer
                 }
             }
 
+            // Sibling types in same package directory and type references
+            string dir = Path.GetDirectoryName(curFile) ?? workspaceRoot;
+            var siblingJavaFiles = Directory.GetFiles(dir, "*.java");
+            foreach (var sjf in siblingJavaFiles)
+            {
+                if (string.Equals(sjf, curFile, StringComparison.OrdinalIgnoreCase)) continue;
+
+                string typeName = Path.GetFileNameWithoutExtension(sjf);
+                // Check if the type name is referenced in the content
+                if (Regex.IsMatch(content, $@"\b{Regex.Escape(typeName)}\b"))
+                {
+                    string targetRel = Path.GetRelativePath(workspaceRoot, sjf).Replace('\\', '/');
+                    if (!fragment.Edges.Any(e => e.SourceNodeId == fileNodeId && e.TargetNodeId == $"file:{targetRel}"))
+                    {
+                        fragment.Edges.Add(new GraphEdge
+                        {
+                            SourceNodeId = fileNodeId,
+                            TargetNodeId = $"file:{targetRel}",
+                            Relationship = RelationshipType.Interface,
+                            Confidence = Confidence.High,
+                            AnalysisLevel = CapabilityLevel.SyntaxAware
+                        });
+                    }
+
+                    if (visited.Add(sjf)) queue.Enqueue(sjf);
+                }
+            }
+
             // Discovered classes/interfaces
             var typeMatches = Regex.Matches(content, @"\b(?:class|interface|record|enum)\s+([A-Za-z0-9_]+)");
             foreach (Match m in typeMatches)

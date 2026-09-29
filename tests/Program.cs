@@ -11,6 +11,7 @@ using AiPromptContextBuilder.Core.Protocol;
 using AiPromptContextBuilder.Core.Scoring;
 using AiPromptContextBuilder.Core.Security;
 using AiPromptContextBuilder.Core.Tokenizer;
+using AiPromptContextBuilder.Core.Workers;
 using AiPromptContextBuilder.Workers.DotNet;
 
 namespace AiPromptContextBuilder.Tests;
@@ -40,6 +41,14 @@ public class Program
         RunTest("12. Budget Selection: Coherent Chains & Auto Comment Mode", TestBudgetSelection);
         await RunTestAsync("13. End-to-End CLI: Full Context Generation", TestCliEndToEnd);
         await RunTestAsync("14. C# Member Access: Constant Interface Reference Traversal", TestConstantInterfaceMemberAccess);
+        RunTest("15. Built-in Syntax Engine: React JSX Component & Import Resolution", TestBuiltInJsxReact);
+        RunTest("16. Built-in Syntax Engine: Python Relative & Dotted Imports", TestBuiltInPython);
+        RunTest("17. In-Process Java Analyzer: Interfaces & Package References", TestJavaAnalyzer);
+        RunTest("18. In-Process Go Analyzer: Structs, Packages & Functions", TestGoAnalyzer);
+        await RunTestAsync("19. Cross-Language End-to-End: React JSX Orchestration (Zero Runtime Dependencies)", TestJsxEndToEnd);
+        await RunTestAsync("20. Cross-Language End-to-End: Java Service Orchestration", TestJavaEndToEnd);
+        await RunTestAsync("21. Cross-Language End-to-End: Go Server Orchestration", TestGoEndToEnd);
+        await RunTestAsync("22. Worker Resilience: Fallback to Built-in Engine When External Worker Fails", TestWorkerFallbackResilience);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -327,6 +336,126 @@ public class Program
         Assert(content.Contains("## Included Files"), "Included files list present");
         Assert(content.Contains($"### File: `{res.RootPath}`"), "Complete source file included");
         Assert(content.Contains("CustomerRepository"), "Complete repository dependency included");
+    }
+
+    private static void TestBuiltInJsxReact()
+    {
+        string root = ResolveFixture("tests/fixtures/node/Dashboard.jsx");
+        string ws = ResolveFixture("tests/fixtures/node");
+        var fragment = BuiltInSyntaxAnalyzer.AnalyzeJsTs(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("Dashboard.jsx")), "Dashboard.jsx discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("MetricCard.jsx")), "MetricCard.jsx discovered via JSX component/import");
+        Assert(fragment.Edges.Any(e => e.Relationship == RelationshipType.Import || e.Relationship == RelationshipType.ComponentUsage), "Edge created between Dashboard and MetricCard");
+    }
+
+    private static void TestBuiltInPython()
+    {
+        string root = ResolveFixture("tests/fixtures/python/service.py");
+        string ws = ResolveFixture("tests/fixtures/python");
+        var fragment = BuiltInSyntaxAnalyzer.AnalyzePython(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("service.py")), "service.py discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("models.py")), "models.py discovered via relative import");
+        Assert(fragment.Edges.Any(e => e.Relationship == RelationshipType.Import), "Edge created between service.py and models.py");
+    }
+
+    private static void TestJavaAnalyzer()
+    {
+        string root = ResolveFixture("tests/fixtures/java/OrderService.java");
+        string ws = ResolveFixture("tests/fixtures/java");
+        var fragment = JavaGoAnalyzer.AnalyzeJava(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("OrderService.java")), "OrderService.java discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("IOrderRepository.java")), "IOrderRepository.java discovered");
+    }
+
+    private static void TestGoAnalyzer()
+    {
+        string root = ResolveFixture("tests/fixtures/go/main.go");
+        string ws = ResolveFixture("tests/fixtures/go");
+        var fragment = JavaGoAnalyzer.AnalyzeGo(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("main.go")), "main.go discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("handler.go")), "handler.go package sibling discovered");
+    }
+
+    private static async Task TestJsxEndToEnd()
+    {
+        string root = ResolveFixture("tests/fixtures/node/Dashboard.jsx");
+        string ws = ResolveFixture("tests/fixtures/node");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Auto,
+            MaxTokens = 20000,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"JSX orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.FilesIncluded >= 2, $"Expected at least 2 files included (Dashboard and MetricCard), got {res.FilesIncluded}");
+        Assert(res.GeneratedMarkdown!.Contains("Dashboard.jsx"), "Dashboard.jsx present in context");
+        Assert(res.GeneratedMarkdown.Contains("MetricCard.jsx"), "MetricCard.jsx present in context");
+        Assert(res.GeneratedMarkdown.Contains("Executive Dashboard"), "Dashboard source content present");
+    }
+
+    private static async Task TestJavaEndToEnd()
+    {
+        string root = ResolveFixture("tests/fixtures/java/OrderService.java");
+        string ws = ResolveFixture("tests/fixtures/java");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Java,
+            MaxTokens = 20000,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Java orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.FilesIncluded >= 2, $"Expected OrderService and IOrderRepository, got {res.FilesIncluded}");
+        Assert(res.GeneratedMarkdown!.Contains("OrderService.java"), "OrderService present in markdown");
+        Assert(res.GeneratedMarkdown.Contains("IOrderRepository.java"), "IOrderRepository present in markdown");
+    }
+
+    private static async Task TestGoEndToEnd()
+    {
+        string root = ResolveFixture("tests/fixtures/go/main.go");
+        string ws = ResolveFixture("tests/fixtures/go");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Go,
+            MaxTokens = 20000,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Go orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.FilesIncluded >= 2, $"Expected main.go and handler.go, got {res.FilesIncluded}");
+        Assert(res.GeneratedMarkdown!.Contains("main.go"), "main.go present in markdown");
+        Assert(res.GeneratedMarkdown.Contains("handler.go"), "handler.go present in markdown");
+    }
+
+    private static async Task TestWorkerFallbackResilience()
+    {
+        // Test that NodeWorkerAdapter falls back gracefully to BuiltInSyntaxAnalyzer when simulated without external node
+        string root = ResolveFixture("tests/fixtures/node/Dashboard.jsx");
+        string ws = ResolveFixture("tests/fixtures/node");
+
+        var adapter = new NodeWorkerAdapter();
+        var fragment = await adapter.AnalyzeAsync(root, ws, new UserConfiguration());
+
+        Assert(fragment.Nodes.Count >= 2, $"Expected at least 2 nodes, got {fragment.Nodes.Count}");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("Dashboard.jsx")), "Dashboard found");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("MetricCard.jsx")), "MetricCard found");
     }
 
     private static void Assert(bool condition, string message)

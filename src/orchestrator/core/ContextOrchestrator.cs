@@ -365,23 +365,45 @@ public class NodeWorkerAdapter : ILanguageAdapter
 
     public async Task<DependencyGraphFragment> AnalyzeAsync(string filePath, string workspaceRoot, UserConfiguration config, CancellationToken cancellationToken = default)
     {
-        string workerJsPath = WorkerLocator.LocateWorkerScript("src/workers/node/host/worker.js");
-        string nodeExe = WorkerLocator.LocateNodeExecutable();
-        var nodeReq = new WorkerProtocolRequest
+        string workerJsPath = WorkerLocator.LocateWorkerScript("worker.js", "src/workers/node/host/worker.js");
+        string? nodeExe = WorkerLocator.LocateNodeExecutable();
+
+        if (string.IsNullOrEmpty(nodeExe) || !File.Exists(workerJsPath))
         {
-            Operation = "analyse",
-            RootPath = filePath,
-            WorkspacePath = workspaceRoot,
-            Language = Path.GetExtension(filePath)
-        };
-        var nodeRes = await WorkerClient.ExecuteExternalWorkerAsync(nodeExe, $"\"{workerJsPath}\"", nodeReq, cancellationToken);
-        if (!nodeRes.Success && !string.IsNullOrEmpty(nodeRes.ErrorMessage))
-        {
-            var frag = nodeRes.Graph ?? new DependencyGraphFragment();
-            frag.Warnings.Add(nodeRes.ErrorMessage);
-            return frag;
+            // Node.js is not installed or worker script is missing -> Fallback immediately to high-speed built-in syntax engine
+            var fallbackFrag = BuiltInSyntaxAnalyzer.AnalyzeJsTs(filePath, workspaceRoot);
+            fallbackFrag.Warnings.Add("Note: Node.js runtime was not detected. Built-in syntax engine was used to discover JSX/TypeScript/JavaScript dependencies. For deep semantic type resolution, you can install Node.js (https://nodejs.org).");
+            return fallbackFrag;
         }
-        return nodeRes.Graph ?? new DependencyGraphFragment();
+
+        try
+        {
+            var nodeReq = new WorkerProtocolRequest
+            {
+                Operation = "analyse",
+                RootPath = filePath,
+                WorkspacePath = workspaceRoot,
+                Language = Path.GetExtension(filePath)
+            };
+            var nodeRes = await WorkerClient.ExecuteExternalWorkerAsync(nodeExe, $"\"{workerJsPath}\"", nodeReq, cancellationToken);
+
+            if (nodeRes.Success && nodeRes.Graph != null && nodeRes.Graph.Nodes.Count > 0)
+            {
+                return nodeRes.Graph;
+            }
+
+            // External worker ran but failed or returned empty response -> seamless fallback!
+            var fallbackFrag = BuiltInSyntaxAnalyzer.AnalyzeJsTs(filePath, workspaceRoot);
+            string detail = !string.IsNullOrWhiteSpace(nodeRes.ErrorMessage) ? $" ({nodeRes.ErrorMessage.Trim()})" : "";
+            fallbackFrag.Warnings.Add($"Note: External Node.js worker encountered an issue{detail}. Built-in syntax engine was used to resolve dependencies.");
+            return fallbackFrag;
+        }
+        catch (Exception ex)
+        {
+            var fallbackFrag = BuiltInSyntaxAnalyzer.AnalyzeJsTs(filePath, workspaceRoot);
+            fallbackFrag.Warnings.Add($"Note: Node.js worker process failed ({ex.Message}). Built-in syntax engine was used to resolve dependencies.");
+            return fallbackFrag;
+        }
     }
 }
 
@@ -399,23 +421,44 @@ public class PythonWorkerAdapter : ILanguageAdapter
 
     public async Task<DependencyGraphFragment> AnalyzeAsync(string filePath, string workspaceRoot, UserConfiguration config, CancellationToken cancellationToken = default)
     {
-        string workerPyPath = WorkerLocator.LocateWorkerScript("src/workers/python/aicontext/worker.py");
-        string pythonExe = WorkerLocator.LocatePythonExecutable();
-        var pyReq = new WorkerProtocolRequest
+        string workerPyPath = WorkerLocator.LocateWorkerScript("worker.py", "src/workers/python/aicontext/worker.py");
+        string? pythonExe = WorkerLocator.LocatePythonExecutable();
+
+        if (string.IsNullOrEmpty(pythonExe) || !File.Exists(workerPyPath))
         {
-            Operation = "analyse",
-            RootPath = filePath,
-            WorkspacePath = workspaceRoot,
-            Language = "Python"
-        };
-        var pyRes = await WorkerClient.ExecuteExternalWorkerAsync(pythonExe, $"\"{workerPyPath}\"", pyReq, cancellationToken);
-        if (!pyRes.Success && !string.IsNullOrEmpty(pyRes.ErrorMessage))
-        {
-            var frag = pyRes.Graph ?? new DependencyGraphFragment();
-            frag.Warnings.Add(pyRes.ErrorMessage);
-            return frag;
+            // Python is not installed -> Fallback to built-in syntax engine
+            var fallbackFrag = BuiltInSyntaxAnalyzer.AnalyzePython(filePath, workspaceRoot);
+            fallbackFrag.Warnings.Add("Note: Python runtime was not detected. Built-in syntax engine was used to discover Python imports and dependencies. For deep AST resolution, you can install Python (https://python.org).");
+            return fallbackFrag;
         }
-        return pyRes.Graph ?? new DependencyGraphFragment();
+
+        try
+        {
+            var pyReq = new WorkerProtocolRequest
+            {
+                Operation = "analyse",
+                RootPath = filePath,
+                WorkspacePath = workspaceRoot,
+                Language = "Python"
+            };
+            var pyRes = await WorkerClient.ExecuteExternalWorkerAsync(pythonExe, $"\"{workerPyPath}\"", pyReq, cancellationToken);
+
+            if (pyRes.Success && pyRes.Graph != null && pyRes.Graph.Nodes.Count > 0)
+            {
+                return pyRes.Graph;
+            }
+
+            var fallbackFrag = BuiltInSyntaxAnalyzer.AnalyzePython(filePath, workspaceRoot);
+            string detail = !string.IsNullOrWhiteSpace(pyRes.ErrorMessage) ? $" ({pyRes.ErrorMessage.Trim()})" : "";
+            fallbackFrag.Warnings.Add($"Note: External Python worker encountered an issue{detail}. Built-in syntax engine was used to resolve dependencies.");
+            return fallbackFrag;
+        }
+        catch (Exception ex)
+        {
+            var fallbackFrag = BuiltInSyntaxAnalyzer.AnalyzePython(filePath, workspaceRoot);
+            fallbackFrag.Warnings.Add($"Note: Python worker process failed ({ex.Message}). Built-in syntax engine was used to resolve dependencies.");
+            return fallbackFrag;
+        }
     }
 }
 
