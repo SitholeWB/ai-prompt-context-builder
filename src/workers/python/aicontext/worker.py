@@ -108,21 +108,10 @@ def analyze(req):
             })
             continue
 
-        # Inspect AST nodes
-        for node in ast.walk(tree):
-            # Check for dynamic importlib or getattr
-            if isinstance(node, ast.Call):
-                func_name = ""
-                if isinstance(node.func, ast.Name):
-                    func_name = node.func.id
-                elif isinstance(node.func, ast.Attribute):
-                    func_name = node.func.attr
-                if func_name in ("import_module", "__import__", "getattr"):
-                    dynamic_constructs.append(f"Dynamic invocation '{func_name}' in {rel_path}")
-
-            # Classes
-            if isinstance(node, ast.ClassDef):
-                cls_name = node.name
+        # Top-level declarations
+        for item in tree.body:
+            if isinstance(item, ast.ClassDef):
+                cls_name = item.name
                 cls_id = f"type:{rel_path}#{cls_name}"
                 nodes.append({
                     "id": cls_id,
@@ -145,22 +134,46 @@ def analyze(req):
                     "metadata": {}
                 })
 
+                # Methods inside class
+                for sub in item.body:
+                    if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        m_name = sub.name
+                        m_id = f"method:{rel_path}#{cls_name}.{m_name}"
+                        nodes.append({
+                            "id": m_id,
+                            "kind": "Method",
+                            "language": "Python",
+                            "analysisLevel": "Semantic",
+                            "displayName": m_name,
+                            "qualifiedName": f"{cls_name}.{m_name}",
+                            "relativePath": rel_path,
+                            "sourceAvailable": True,
+                            "diagnostics": [],
+                            "metadata": {}
+                        })
+                        edges.append({
+                            "sourceNodeId": cls_id,
+                            "targetNodeId": m_id,
+                            "relationship": "Member",
+                            "confidence": "Verified",
+                            "analysisLevel": "Semantic",
+                            "metadata": {}
+                        })
+
                 # Base classes
-                for base in node.bases:
+                for base in item.bases:
                     base_name = ""
                     if isinstance(base, ast.Name):
                         base_name = base.id
                     elif isinstance(base, ast.Attribute):
                         base_name = base.attr
                     if base_name:
-                        # Attempt to resolve local base class
                         resolved_file = resolve_python_module(base_name, current_file, workspace_root)
                         if resolved_file:
                             link_and_queue(cls_id, resolved_file, "BaseType", edges, queue, visited_files, workspace_root)
 
-            # Functions
-            elif isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
-                fn_name = node.name
+            elif isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                fn_name = item.name
                 fn_id = f"fn:{rel_path}#{fn_name}"
                 nodes.append({
                     "id": fn_id,
@@ -174,6 +187,26 @@ def analyze(req):
                     "diagnostics": [],
                     "metadata": {}
                 })
+                edges.append({
+                    "sourceNodeId": file_node_id,
+                    "targetNodeId": fn_id,
+                    "relationship": "Export",
+                    "confidence": "Verified",
+                    "analysisLevel": "Semantic",
+                    "metadata": {}
+                })
+
+        # Inspect AST nodes for calls, dynamic constructs, and imports
+        for node in ast.walk(tree):
+            # Check for dynamic importlib or getattr
+            if isinstance(node, ast.Call):
+                func_name = ""
+                if isinstance(node.func, ast.Name):
+                    func_name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    func_name = node.func.attr
+                if func_name in ("import_module", "__import__", "getattr"):
+                    dynamic_constructs.append(f"Dynamic invocation '{func_name}' in {rel_path}")
 
             # Imports: import foo
             elif isinstance(node, ast.Import):
@@ -181,7 +214,8 @@ def analyze(req):
                     mod_name = alias.name
                     target = resolve_python_module(mod_name, current_file, workspace_root)
                     if target:
-                        link_and_queue(file_node_id, target, "Import", edges, queue, visited_files, workspace_root)
+                        rel_type = "ExtensionMethod" if any(k in mod_name.lower() for k in ("helper", "extension", "util", "mixin")) else "Import"
+                        link_and_queue(file_node_id, target, rel_type, edges, queue, visited_files, workspace_root)
 
             # Relative & absolute imports: from .foo import bar
             elif isinstance(node, ast.ImportFrom):
@@ -193,7 +227,9 @@ def analyze(req):
                     target = resolve_python_module(node.module, current_file, workspace_root)
 
                 if target:
-                    link_and_queue(file_node_id, target, "Import", edges, queue, visited_files, workspace_root)
+                    mod_str = (node.module or "") + " " + os.path.basename(target)
+                    rel_type = "ExtensionMethod" if any(k in mod_str.lower() for k in ("helper", "extension", "util", "mixin")) else "Import"
+                    link_and_queue(file_node_id, target, rel_type, edges, queue, visited_files, workspace_root)
 
     if dynamic_constructs:
         warnings.append(f"Python dynamic constructs detected (may affect completeness): {', '.join(dynamic_constructs[:3])}")

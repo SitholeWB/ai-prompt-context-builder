@@ -49,6 +49,10 @@ public class Program
         await RunTestAsync("20. Cross-Language End-to-End: Java Service Orchestration", TestJavaEndToEnd);
         await RunTestAsync("21. Cross-Language End-to-End: Go Server Orchestration", TestGoEndToEnd);
         await RunTestAsync("22. Worker Resilience: Fallback to Built-in Engine When External Worker Fails", TestWorkerFallbackResilience);
+        await RunTestAsync("23. C# Extension Methods: Invocations on Instances & Static Class Traversal", TestDotNetExtensionMethods);
+        await RunTestAsync("24. Java Static / Extension Imports: Method Resolution to Declaring Class", TestJavaStaticAndExtensionMethods);
+        await RunTestAsync("25. TypeScript / JavaScript Prototype Extensions: Dynamic Method Augmentation", TestJsTsPrototypeExtensions);
+        await RunTestAsync("26. Python Helpers & Extensions: Module Resolution & Mixins", TestPythonHelpersAndExtensions);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -456,6 +460,105 @@ public class Program
         Assert(fragment.Nodes.Count >= 2, $"Expected at least 2 nodes, got {fragment.Nodes.Count}");
         Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("Dashboard.jsx")), "Dashboard found");
         Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("MetricCard.jsx")), "MetricCard found");
+    }
+
+    private static async Task TestDotNetExtensionMethods()
+    {
+        string root = ResolveFixture("tests/fixtures/dotnet/CustomerReportService.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
+        var analyzer = new DotNetAnalyzer();
+        var fragment = analyzer.Analyze(root, ws, new UserConfiguration());
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("CustomerReportService.cs")), "CustomerReportService discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("CustomerExtensions.cs")), "CustomerExtensions discovered via extension method call");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("Customer.cs")), "Customer model discovered");
+        Assert(fragment.Edges.Any(e => e.Relationship == RelationshipType.ExtensionMethod), "ExtensionMethod edge recorded in graph");
+
+        var orchestrator = new ContextOrchestrator();
+        orchestrator.RegisterAdapter(new DotNetAdapter());
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.CSharp,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"C# Extension Method orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("CustomerExtensions.cs"), "CustomerExtensions.cs included in generated context");
+        Assert(res.GeneratedMarkdown.Contains("ToSummary"), "ToSummary extension method present in context");
+        Assert(res.GeneratedMarkdown.Contains("Customer.cs"), "Customer model included in context");
+    }
+
+    private static async Task TestJavaStaticAndExtensionMethods()
+    {
+        string root = ResolveFixture("tests/fixtures/java/ArticleService.java");
+        string ws = ResolveFixture("tests/fixtures/java");
+        var fragment = JavaGoAnalyzer.AnalyzeJava(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("ArticleService.java")), "ArticleService discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("StringUtils.java")), "StringUtils discovered via static method import");
+        Assert(fragment.Edges.Any(e => e.Relationship == RelationshipType.ExtensionMethod), "ExtensionMethod edge recorded for static import");
+
+        var orchestrator = new ContextOrchestrator();
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Java,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Java static/extension method orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("StringUtils.java"), "StringUtils.java included in context");
+        Assert(res.GeneratedMarkdown.Contains("toSlug"), "toSlug method present in context");
+    }
+
+    private static async Task TestJsTsPrototypeExtensions()
+    {
+        string root = ResolveFixture("tests/fixtures/node/ArticlePage.tsx");
+        string ws = ResolveFixture("tests/fixtures/node");
+        var fragment = BuiltInSyntaxAnalyzer.AnalyzeJsTs(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("ArticlePage.tsx")), "ArticlePage discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("string.extensions.ts")), "string.extensions.ts discovered via prototype extension call");
+        Assert(fragment.Edges.Any(e => e.Relationship == RelationshipType.ExtensionMethod), "ExtensionMethod edge recorded for TS prototype extension");
+
+        var orchestrator = new ContextOrchestrator();
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Auto,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"TS Prototype Extension orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("string.extensions.ts"), "string.extensions.ts included in context");
+        Assert(res.GeneratedMarkdown.Contains("toSlug"), "toSlug method present in context");
+    }
+
+    private static async Task TestPythonHelpersAndExtensions()
+    {
+        string root = ResolveFixture("tests/fixtures/python/post_service.py");
+        string ws = ResolveFixture("tests/fixtures/python");
+        var fragment = BuiltInSyntaxAnalyzer.AnalyzePython(root, ws);
+
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("post_service.py")), "post_service.py discovered");
+        Assert(fragment.Nodes.Any(n => n.RelativePath.EndsWith("helpers.py")), "helpers.py discovered");
+
+        var orchestrator = new ContextOrchestrator();
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Python,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Python helper/extension orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("helpers.py"), "helpers.py included in context");
+        Assert(res.GeneratedMarkdown.Contains("to_slug"), "to_slug function present in context");
     }
 
     private static void Assert(bool condition, string message)

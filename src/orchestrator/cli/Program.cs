@@ -29,7 +29,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.5");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.0.6");
             return 0;
         }
 

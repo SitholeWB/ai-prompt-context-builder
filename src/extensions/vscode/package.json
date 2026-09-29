@@ -3,7 +3,7 @@
   "displayName": "AI Context Builder & Prompt Generator",
   "icon": "media/icon.png",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",

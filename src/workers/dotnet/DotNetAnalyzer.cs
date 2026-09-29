@@ -11,6 +11,15 @@ using ProtocolSeverity = AiPromptContextBuilder.Core.Protocol.DiagnosticSeverity
 
 namespace AiPromptContextBuilder.Workers.DotNet;
 
+public class ExtensionMethodInfo
+{
+    public string MethodName { get; set; } = string.Empty;
+    public string DeclaringClassName { get; set; } = string.Empty;
+    public string DeclaringFilePath { get; set; } = string.Empty;
+    public string TargetTypeName { get; set; } = string.Empty;
+    public string Namespace { get; set; } = string.Empty;
+}
+
 public class DotNetAnalyzer
 {
     public DependencyGraphFragment Analyze(
@@ -55,6 +64,7 @@ public class DotNetAnalyzer
             : new List<string> { normalizedRoot };
 
         var typeToFileIndex = BuildTypeToFileIndex(workspaceFiles, workspaceRoot);
+        var extensionMethodIndex = BuildExtensionMethodIndex(workspaceFiles, workspaceRoot);
 
         while (filesToAnalyze.Count > 0)
         {
@@ -70,7 +80,7 @@ public class DotNetAnalyzer
 
             if (ext == ".cs")
             {
-                AnalyzeCSharpFile(currentFilePath, relPath, workspaceRoot, fragment, filesToAnalyze, visitedFiles, typeToFileIndex, config);
+                AnalyzeCSharpFile(currentFilePath, relPath, workspaceRoot, fragment, filesToAnalyze, visitedFiles, typeToFileIndex, extensionMethodIndex, config);
             }
         }
 
@@ -85,6 +95,7 @@ public class DotNetAnalyzer
         Queue<string> queue,
         HashSet<string> visitedFiles,
         Dictionary<string, List<string>> typeToFileIndex,
+        Dictionary<string, List<ExtensionMethodInfo>> extensionMethodIndex,
         UserConfiguration config)
     {
         string code = File.ReadAllText(filePath);
@@ -131,7 +142,7 @@ public class DotNetAnalyzer
         if (typeDeclarations.Count == 0)
         {
             // Top-level statements or file-scoped code
-            ExtractDependenciesFromContainer(root, fileNodeId, filePath, workspaceRoot, fragment, queue, visitedFiles, typeToFileIndex, config);
+            ExtractDependenciesFromContainer(root, fileNodeId, filePath, workspaceRoot, fragment, queue, visitedFiles, typeToFileIndex, extensionMethodIndex, config);
         }
         else
         {
@@ -281,7 +292,7 @@ public class DotNetAnalyzer
                 }
 
                 // 8. Comprehensive expressions & member references inside type (constants, static classes, enums, casts, locals, new T())
-                ExtractDependenciesFromContainer(typeDecl, typeNodeId, filePath, workspaceRoot, fragment, queue, visitedFiles, typeToFileIndex, config);
+                ExtractDependenciesFromContainer(typeDecl, typeNodeId, filePath, workspaceRoot, fragment, queue, visitedFiles, typeToFileIndex, extensionMethodIndex, config);
             }
         }
     }
@@ -295,6 +306,7 @@ public class DotNetAnalyzer
         Queue<string> queue,
         HashSet<string> visitedFiles,
         Dictionary<string, List<string>> typeToFileIndex,
+        Dictionary<string, List<ExtensionMethodInfo>> extensionMethodIndex,
         UserConfiguration config)
     {
         // 1. Member Access Expressions (Constants, Enums, Static Methods/Fields, e.g. CommonValues.Fan_Name)
@@ -428,6 +440,29 @@ public class DotNetAnalyzer
             if (typeToFileIndex.ContainsKey(idText))
             {
                 ResolveAndLinkType(sourceNodeId, idText, RelationshipType.FieldType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 11. Extension Method Invocations (e.g. customer.ToDto(), builder.Services.AddMyServices(), str?.ToSlug())
+        var invocations = container.DescendantNodes().OfType<InvocationExpressionSyntax>();
+        foreach (var inv in invocations)
+        {
+            string? invokedMethodName = null;
+            if (inv.Expression is MemberAccessExpressionSyntax ma)
+            {
+                invokedMethodName = (ma.Name is GenericNameSyntax gn) ? gn.Identifier.Text : ma.Name.Identifier.Text;
+            }
+            else if (inv.Expression is MemberBindingExpressionSyntax mb)
+            {
+                invokedMethodName = (mb.Name is GenericNameSyntax gn) ? gn.Identifier.Text : mb.Name.Identifier.Text;
+            }
+
+            if (!string.IsNullOrEmpty(invokedMethodName) && extensionMethodIndex.TryGetValue(invokedMethodName, out var extList))
+            {
+                foreach (var ext in extList)
+                {
+                    ResolveAndLinkExtensionMethod(sourceNodeId, ext, fragment, queue, visitedFiles, workspaceRoot, filePath);
+                }
             }
         }
     }
@@ -616,6 +651,41 @@ public class DotNetAnalyzer
         }
     }
 
+    private void ResolveAndLinkExtensionMethod(
+        string sourceNodeId,
+        ExtensionMethodInfo ext,
+        DependencyGraphFragment fragment,
+        Queue<string> queue,
+        HashSet<string> visitedFiles,
+        string workspaceRoot,
+        string currentFilePath)
+    {
+        if (string.Equals(ext.DeclaringFilePath, currentFilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        string targetRel = Path.GetRelativePath(workspaceRoot, ext.DeclaringFilePath).Replace('\\', '/');
+        string targetNodeId = $"file:{targetRel}";
+
+        if (!fragment.Edges.Any(e => e.SourceNodeId == sourceNodeId && e.TargetNodeId == targetNodeId && e.Relationship == RelationshipType.ExtensionMethod))
+        {
+            fragment.Edges.Add(new GraphEdge
+            {
+                SourceNodeId = sourceNodeId,
+                TargetNodeId = targetNodeId,
+                Relationship = RelationshipType.ExtensionMethod,
+                Confidence = Confidence.Verified,
+                AnalysisLevel = CapabilityLevel.Semantic
+            });
+        }
+
+        if (visitedFiles.Add(ext.DeclaringFilePath))
+        {
+            queue.Enqueue(ext.DeclaringFilePath);
+        }
+    }
+
     private IEnumerable<string> ExtractTargetTypeNames(ExpressionSyntax? expr)
     {
         if (expr == null) yield break;
@@ -704,6 +774,68 @@ public class DotNetAnalyzer
                     list.Add(file);
                 }
             }
+        }
+        return index;
+    }
+
+    private Dictionary<string, List<ExtensionMethodInfo>> BuildExtensionMethodIndex(List<string> files, string workspaceRoot)
+    {
+        var index = new Dictionary<string, List<ExtensionMethodInfo>>(StringComparer.Ordinal);
+        foreach (var file in files)
+        {
+            if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+
+            try
+            {
+                string text = File.ReadAllText(file);
+                // Fast pre-filter: must contain "static" and "this" to declare an extension method
+                if (!text.Contains("static") || !text.Contains("this")) continue;
+
+                var tree = CSharpSyntaxTree.ParseText(text, path: file);
+                var root = tree.GetCompilationUnitRoot();
+
+                string ns = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "";
+
+                var classDecls = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                    .Where(c => c.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)));
+
+                foreach (var cls in classDecls)
+                {
+                    string className = cls.Identifier.Text;
+                    var methods = cls.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                        .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)));
+
+                    foreach (var method in methods)
+                    {
+                        if (method.ParameterList.Parameters.Count > 0)
+                        {
+                            var firstParam = method.ParameterList.Parameters[0];
+                            if (firstParam.Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword)) && firstParam.Type != null)
+                            {
+                                string methodName = method.Identifier.Text;
+                                string targetTypeName = GetSimpleTypeName(firstParam.Type);
+
+                                var info = new ExtensionMethodInfo
+                                {
+                                    MethodName = methodName,
+                                    DeclaringClassName = className,
+                                    DeclaringFilePath = file,
+                                    TargetTypeName = targetTypeName,
+                                    Namespace = ns
+                                };
+
+                                if (!index.TryGetValue(methodName, out var list))
+                                {
+                                    list = new List<ExtensionMethodInfo>();
+                                    index[methodName] = list;
+                                }
+                                list.Add(info);
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
         }
         return index;
     }

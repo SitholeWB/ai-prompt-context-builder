@@ -389,6 +389,22 @@ public class NodeWorkerAdapter : ILanguageAdapter
 
             if (nodeRes.Success && nodeRes.Graph != null && nodeRes.Graph.Nodes.Count > 0)
             {
+                var builtInFrag = BuiltInSyntaxAnalyzer.AnalyzeJsTs(filePath, workspaceRoot);
+                foreach (var node in builtInFrag.Nodes)
+                {
+                    if (!nodeRes.Graph.Nodes.Any(n => n.Id.Equals(node.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        nodeRes.Graph.Nodes.Add(node);
+                    }
+                }
+                foreach (var edge in builtInFrag.Edges)
+                {
+                    if (!nodeRes.Graph.Edges.Any(e => e.SourceNodeId.Equals(edge.SourceNodeId, StringComparison.OrdinalIgnoreCase) &&
+                                                      e.TargetNodeId.Equals(edge.TargetNodeId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        nodeRes.Graph.Edges.Add(edge);
+                    }
+                }
                 return nodeRes.Graph;
             }
 
@@ -445,6 +461,22 @@ public class PythonWorkerAdapter : ILanguageAdapter
 
             if (pyRes.Success && pyRes.Graph != null && pyRes.Graph.Nodes.Count > 0)
             {
+                var builtInFrag = BuiltInSyntaxAnalyzer.AnalyzePython(filePath, workspaceRoot);
+                foreach (var node in builtInFrag.Nodes)
+                {
+                    if (!pyRes.Graph.Nodes.Any(n => n.Id.Equals(node.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        pyRes.Graph.Nodes.Add(node);
+                    }
+                }
+                foreach (var edge in builtInFrag.Edges)
+                {
+                    if (!pyRes.Graph.Edges.Any(e => e.SourceNodeId.Equals(edge.SourceNodeId, StringComparison.OrdinalIgnoreCase) &&
+                                                    e.TargetNodeId.Equals(edge.TargetNodeId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        pyRes.Graph.Edges.Add(edge);
+                    }
+                }
                 return pyRes.Graph;
             }
 

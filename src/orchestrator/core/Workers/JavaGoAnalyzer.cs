@@ -40,32 +40,105 @@ public static class JavaGoAnalyzer
                 Content = content
             });
 
-            // Discovered package & imports
-            var importMatches = Regex.Matches(content, @"^\s*import\s+(?:static\s+)?([A-Za-z0-9_.]+);", RegexOptions.Multiline);
+            // 1. Discovered package & imports (handling both regular and static imports)
+            var importMatches = Regex.Matches(content, @"^\s*import\s+(static\s+)?([A-Za-z0-9_.]+);", RegexOptions.Multiline);
             foreach (Match m in importMatches)
             {
-                string importedType = m.Groups[1].Value;
-                string simpleName = importedType.Split('.').Last();
+                bool isStatic = m.Groups[1].Success;
+                string importedType = m.Groups[2].Value;
+                var parts = importedType.Split('.');
 
-                // Search for local matching java file in workspace
-                var localFiles = Directory.GetFiles(workspaceRoot, $"{simpleName}.java", SearchOption.AllDirectories);
+                // Search right to left for the declaring class
+                for (int i = parts.Length - 1; i >= 0; i--)
+                {
+                    string candidateName = parts[i];
+                    if (string.IsNullOrEmpty(candidateName) || candidateName == "*") continue;
+
+                    var localFiles = Directory.GetFiles(workspaceRoot, $"{candidateName}.java", SearchOption.AllDirectories);
+                    if (localFiles.Length > 0)
+                    {
+                        var relType = isStatic ? RelationshipType.ExtensionMethod : RelationshipType.Import;
+                        foreach (var lf in localFiles)
+                        {
+                            string targetRel = Path.GetRelativePath(workspaceRoot, lf).Replace('\\', '/');
+                            if (!fragment.Edges.Any(e => e.SourceNodeId == fileNodeId && e.TargetNodeId == $"file:{targetRel}"))
+                            {
+                                fragment.Edges.Add(new GraphEdge
+                                {
+                                    SourceNodeId = fileNodeId,
+                                    TargetNodeId = $"file:{targetRel}",
+                                    Relationship = relType,
+                                    Confidence = Confidence.High,
+                                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                                });
+                            }
+
+                            if (visited.Add(lf)) queue.Enqueue(lf);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // 2. Lombok @ExtensionMethod({CustomerExtensions.class, ...})
+            var extMatches = Regex.Matches(content, @"@ExtensionMethod\s*\(\s*\{?([^)]+)\}?\s*\)");
+            foreach (Match em in extMatches)
+            {
+                var classRefs = Regex.Matches(em.Groups[1].Value, @"([A-Za-z0-9_]+)\.class");
+                foreach (Match cr in classRefs)
+                {
+                    string className = cr.Groups[1].Value;
+                    var localFiles = Directory.GetFiles(workspaceRoot, $"{className}.java", SearchOption.AllDirectories);
+                    foreach (var lf in localFiles)
+                    {
+                        string targetRel = Path.GetRelativePath(workspaceRoot, lf).Replace('\\', '/');
+                        if (!fragment.Edges.Any(e => e.SourceNodeId == fileNodeId && e.TargetNodeId == $"file:{targetRel}"))
+                        {
+                            fragment.Edges.Add(new GraphEdge
+                            {
+                                SourceNodeId = fileNodeId,
+                                TargetNodeId = $"file:{targetRel}",
+                                Relationship = RelationshipType.ExtensionMethod,
+                                Confidence = Confidence.Verified,
+                                AnalysisLevel = CapabilityLevel.SyntaxAware
+                            });
+                        }
+
+                        if (visited.Add(lf)) queue.Enqueue(lf);
+                    }
+                }
+            }
+
+            // 3. Static helper & utility method calls (e.g. CustomerExtensions.toDto(...), StringUtils.isBlank(...))
+            var staticCalls = Regex.Matches(content, @"\b([A-Z][A-Za-z0-9_]+)\.[a-z][A-Za-z0-9_]*\s*\(");
+            foreach (Match sc in staticCalls)
+            {
+                string className = sc.Groups[1].Value;
+                var localFiles = Directory.GetFiles(workspaceRoot, $"{className}.java", SearchOption.AllDirectories);
                 foreach (var lf in localFiles)
                 {
                     string targetRel = Path.GetRelativePath(workspaceRoot, lf).Replace('\\', '/');
-                    fragment.Edges.Add(new GraphEdge
+                    if (!fragment.Edges.Any(e => e.SourceNodeId == fileNodeId && e.TargetNodeId == $"file:{targetRel}"))
                     {
-                        SourceNodeId = fileNodeId,
-                        TargetNodeId = $"file:{targetRel}",
-                        Relationship = RelationshipType.Import,
-                        Confidence = Confidence.High,
-                        AnalysisLevel = CapabilityLevel.SyntaxAware
-                    });
+                        var relType = className.EndsWith("Extensions") || className.EndsWith("Extension") || className.EndsWith("Utils") || className.EndsWith("Helper")
+                            ? RelationshipType.ExtensionMethod
+                            : RelationshipType.MethodCall;
+
+                        fragment.Edges.Add(new GraphEdge
+                        {
+                            SourceNodeId = fileNodeId,
+                            TargetNodeId = $"file:{targetRel}",
+                            Relationship = relType,
+                            Confidence = Confidence.High,
+                            AnalysisLevel = CapabilityLevel.SyntaxAware
+                        });
+                    }
 
                     if (visited.Add(lf)) queue.Enqueue(lf);
                 }
             }
 
-            // Sibling types in same package directory and type references
+            // 4. Sibling types in same package directory and type references
             string dir = Path.GetDirectoryName(curFile) ?? workspaceRoot;
             var siblingJavaFiles = Directory.GetFiles(dir, "*.java");
             foreach (var sjf in siblingJavaFiles)
@@ -79,11 +152,15 @@ public static class JavaGoAnalyzer
                     string targetRel = Path.GetRelativePath(workspaceRoot, sjf).Replace('\\', '/');
                     if (!fragment.Edges.Any(e => e.SourceNodeId == fileNodeId && e.TargetNodeId == $"file:{targetRel}"))
                     {
+                        var relType = typeName.EndsWith("Extensions") || typeName.EndsWith("Extension")
+                            ? RelationshipType.ExtensionMethod
+                            : RelationshipType.Interface;
+
                         fragment.Edges.Add(new GraphEdge
                         {
                             SourceNodeId = fileNodeId,
                             TargetNodeId = $"file:{targetRel}",
-                            Relationship = RelationshipType.Interface,
+                            Relationship = relType,
                             Confidence = Confidence.High,
                             AnalysisLevel = CapabilityLevel.SyntaxAware
                         });
@@ -168,6 +245,46 @@ public static class JavaGoAnalyzer
                     });
 
                     if (visited.Add(sf)) queue.Enqueue(sf);
+                }
+            }
+
+            // Local package and extension imports (e.g. import "myproject/extensions", import "./utils")
+            var goImports = Regex.Matches(content, @"import\s*\(([\s\S]*?)\)|import\s+['""]([^'""]+)['""]");
+            foreach (Match gi in goImports)
+            {
+                string importBlock = gi.Groups[1].Success ? gi.Groups[1].Value : gi.Groups[2].Value;
+                var strMatches = Regex.Matches(importBlock, @"['""]([^'""]+)['""]");
+                foreach (Match sm in strMatches)
+                {
+                    string imp = sm.Groups[1].Value;
+                    string pkgDirName = imp.Split('/').Last();
+                    if (string.IsNullOrEmpty(pkgDirName)) continue;
+
+                    var dirs = Directory.GetDirectories(workspaceRoot, pkgDirName, SearchOption.AllDirectories);
+                    foreach (var d in dirs)
+                    {
+                        var goFiles = Directory.GetFiles(d, "*.go").Where(f => !f.EndsWith("_test.go"));
+                        foreach (var gf in goFiles)
+                        {
+                            string targetRel = Path.GetRelativePath(workspaceRoot, gf).Replace('\\', '/');
+                            if (!fragment.Edges.Any(e => e.SourceNodeId == fileNodeId && e.TargetNodeId == $"file:{targetRel}"))
+                            {
+                                var relType = pkgDirName.Contains("ext", StringComparison.OrdinalIgnoreCase)
+                                    ? RelationshipType.ExtensionMethod
+                                    : RelationshipType.Import;
+
+                                fragment.Edges.Add(new GraphEdge
+                                {
+                                    SourceNodeId = fileNodeId,
+                                    TargetNodeId = $"file:{targetRel}",
+                                    Relationship = relType,
+                                    Confidence = Confidence.High,
+                                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                                });
+                                if (visited.Add(gf)) queue.Enqueue(gf);
+                            }
+                        }
+                    }
                 }
             }
 

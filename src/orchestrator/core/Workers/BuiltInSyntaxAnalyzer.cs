@@ -146,7 +146,53 @@ public static class BuiltInSyntaxAnalyzer
                 string? target = ResolvePythonModule(workspaceRoot, Path.GetDirectoryName(curFile)!, mod);
                 if (target != null && File.Exists(target))
                 {
-                    LinkAndQueue(fileNodeId, target, RelationshipType.Import, fragment, queue, visited, workspaceRoot);
+                    var relType = mod.Contains("extension", StringComparison.OrdinalIgnoreCase) || mod.Contains("ext", StringComparison.OrdinalIgnoreCase)
+                        ? RelationshipType.ExtensionMethod
+                        : RelationshipType.Import;
+                    LinkAndQueue(fileNodeId, target, relType, fragment, queue, visited, workspaceRoot);
+                }
+            }
+
+            // 4. Base classes and Mixins: class Customer(CustomerMixin, Base):
+            var classMatches = Regex.Matches(content, @"^\s*class\s+[A-Za-z0-9_]+\s*\(([^)]+)\)\s*:", RegexOptions.Multiline);
+            foreach (Match cm in classMatches)
+            {
+                var bases = cm.Groups[1].Value.Split(',');
+                foreach (var b in bases)
+                {
+                    string baseName = b.Trim();
+                    if (string.IsNullOrEmpty(baseName)) continue;
+
+                    string? target = ResolvePythonModule(workspaceRoot, Path.GetDirectoryName(curFile)!, baseName);
+                    if (target != null && File.Exists(target))
+                    {
+                        var relType = baseName.EndsWith("Mixin", StringComparison.OrdinalIgnoreCase) || baseName.EndsWith("Extension", StringComparison.OrdinalIgnoreCase)
+                            ? RelationshipType.ExtensionMethod
+                            : RelationshipType.BaseType;
+                        LinkAndQueue(fileNodeId, target, relType, fragment, queue, visited, workspaceRoot);
+                    }
+                }
+            }
+
+            // 5. Local extension and helper modules (extensions.py, helpers.py, utils.py)
+            string curDir = Path.GetDirectoryName(curFile)!;
+            string[] helperNames = { "extensions.py", "ext.py", "helpers.py", "utils.py", "mixins.py" };
+            foreach (var hName in helperNames)
+            {
+                string hPath = Path.Combine(curDir, hName);
+                if (File.Exists(hPath) && !string.Equals(hPath, curFile, StringComparison.OrdinalIgnoreCase))
+                {
+                    string hContent = File.ReadAllText(hPath);
+                    var defMatches = Regex.Matches(hContent, @"^\s*(?:def|class)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+                    foreach (Match dm in defMatches)
+                    {
+                        string fnName = dm.Groups[1].Value;
+                        if (Regex.IsMatch(content, $@"\b{Regex.Escape(fnName)}\b"))
+                        {
+                            LinkAndQueue(fileNodeId, hPath, RelationshipType.ExtensionMethod, fragment, queue, visited, workspaceRoot);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -246,6 +292,62 @@ public static class BuiltInSyntaxAnalyzer
                 {
                     LinkAndQueue(fileNodeId, sPath, RelationshipType.Style, fragment, queue, visited, workspaceRoot);
                 }
+            }
+        }
+
+        // 6. Prototype / Module Augmentation Extension Files (*.extensions.ts, *.extensions.js)
+        var methodCalls = Regex.Matches(content, @"\.([a-zA-Z0-9_]+)\s*\(");
+        if (methodCalls.Count > 0)
+        {
+            var calledMethodNames = new HashSet<string>(methodCalls.Select(m => m.Groups[1].Value), StringComparer.Ordinal);
+            string[] candidateExtFiles;
+            try
+            {
+                candidateExtFiles = Directory.GetFiles(workspaceRoot, "*.*", SearchOption.AllDirectories)
+                    .Where(f =>
+                    {
+                        string name = Path.GetFileName(f).ToLowerInvariant();
+                        return (name.Contains("extension") || name.Contains("polyfill")) && (name.EndsWith(".ts") || name.EndsWith(".js"));
+                    })
+                    .ToArray();
+            }
+            catch
+            {
+                candidateExtFiles = Array.Empty<string>();
+            }
+
+            foreach (var cef in candidateExtFiles)
+            {
+                if (string.Equals(cef, curFile, StringComparison.OrdinalIgnoreCase)) continue;
+
+                try
+                {
+                    string extCode = File.ReadAllText(cef);
+                    var protoMatches = Regex.Matches(extCode, @"\.prototype\.([A-Za-z0-9_]+)\s*=");
+                    bool matched = false;
+                    foreach (Match pm in protoMatches)
+                    {
+                        if (calledMethodNames.Contains(pm.Groups[1].Value))
+                        {
+                            LinkAndQueue(fileNodeId, cef, RelationshipType.ExtensionMethod, fragment, queue, visited, workspaceRoot);
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched && Regex.IsMatch(extCode, @"declare\s+global"))
+                    {
+                        var ifaceMethodMatches = Regex.Matches(extCode, @"([a-zA-Z0-9_]+)\s*\([^)]*\)\s*:");
+                        foreach (Match im in ifaceMethodMatches)
+                        {
+                            if (calledMethodNames.Contains(im.Groups[1].Value))
+                            {
+                                LinkAndQueue(fileNodeId, cef, RelationshipType.ExtensionMethod, fragment, queue, visited, workspaceRoot);
+                                break;
+                            }
+                        }
+                    }
+                }
+                catch { }
             }
         }
     }

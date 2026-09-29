@@ -98,9 +98,12 @@ public static class RootTargetResolver
             };
         }
 
-        // Multiple candidates: check if one matches the filename
+        // Multiple candidates: check if one matches the filename (supporting snake_case and kebab-case matching)
         string fileNameWithoutExt = Path.GetFileNameWithoutExtension(rootFilePath);
-        var matchingName = declarationNodes.FirstOrDefault(n => string.Equals(n.DisplayName, fileNameWithoutExt, StringComparison.OrdinalIgnoreCase));
+        string normalizedFileName = fileNameWithoutExt.Replace("_", "").Replace("-", "");
+        var matchingName = declarationNodes.FirstOrDefault(n =>
+            string.Equals(n.DisplayName, fileNameWithoutExt, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(n.DisplayName.Replace("_", "").Replace("-", ""), normalizedFileName, StringComparison.OrdinalIgnoreCase));
         if (matchingName != null)
         {
             return new RootSelectionResult

@@ -265,12 +265,14 @@ function analyzeJsTsFile(filePath, relPath, content, fileNodeId, nodes, edges, q
       }
 
       visit(sourceFile);
-      return;
     } catch {}
+  } else {
+    // Regex fallback if TS AST fails or ts module not loaded
+    fallbackJsImportScan(filePath, content, fileNodeId, edges, queue, visitedFiles, workspaceRoot);
   }
 
-  // Regex fallback if TS AST fails
-  fallbackJsImportScan(filePath, content, fileNodeId, edges, queue, visitedFiles, workspaceRoot);
+  // Scan prototype extensions and augmentations (*.extensions.ts, *.polyfill.ts, etc.)
+  scanPrototypeExtensions(filePath, content, fileNodeId, edges, queue, visitedFiles, workspaceRoot);
 }
 
 function fallbackJsImportScan(filePath, content, fileNodeId, edges, queue, visitedFiles, workspaceRoot) {
@@ -452,3 +454,63 @@ function linkAndQueueFile(sourceNodeId, targetFile, relationship, confidence, an
     queue.push(targetFile);
   }
 }
+
+function scanPrototypeExtensions(filePath, content, fileNodeId, edges, queue, visitedFiles, workspaceRoot) {
+  const methodRegex = /\.([a-zA-Z0-9_]+)\s*\(/g;
+  const calledMethods = new Set();
+  let m;
+  while ((m = methodRegex.exec(content)) !== null) {
+    calledMethods.add(m[1]);
+  }
+  if (calledMethods.size === 0) return;
+
+  function findCandidates(dir) {
+    let results = [];
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === 'bin' || entry.name === 'obj') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          results = results.concat(findCandidates(full));
+        } else if (entry.isFile()) {
+          const lower = entry.name.toLowerCase();
+          if ((lower.includes('extension') || lower.includes('polyfill') || lower.includes('util')) &&
+              (lower.endsWith('.ts') || lower.endsWith('.js') || lower.endsWith('.tsx') || lower.endsWith('.jsx'))) {
+            results.push(full);
+          }
+        }
+      }
+    } catch {}
+    return results;
+  }
+
+  const candidates = findCandidates(workspaceRoot);
+  for (const cand of candidates) {
+    if (path.resolve(cand) === path.resolve(filePath)) continue;
+    try {
+      const extCode = fs.readFileSync(cand, 'utf8');
+      const protoRegex = /\.prototype\.([A-Za-z0-9_]+)\s*=/g;
+      let pMatch;
+      let matched = false;
+      while ((pMatch = protoRegex.exec(extCode)) !== null) {
+        if (calledMethods.has(pMatch[1])) {
+          linkAndQueueFile(fileNodeId, cand, 'ExtensionMethod', 'Verified', 'Semantic', edges, queue, visitedFiles, workspaceRoot);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched && /declare\s+global/.test(extCode)) {
+        const ifaceRegex = /([a-zA-Z0-9_]+)\s*\([^)]*\)\s*:/g;
+        let iMatch;
+        while ((iMatch = ifaceRegex.exec(extCode)) !== null) {
+          if (calledMethods.has(iMatch[1])) {
+            linkAndQueueFile(fileNodeId, cand, 'ExtensionMethod', 'Verified', 'Semantic', edges, queue, visitedFiles, workspaceRoot);
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+}
+
