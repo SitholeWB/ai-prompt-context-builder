@@ -39,6 +39,7 @@ public class Program
         await RunTestAsync("11. Python Worker: AST Imports & Docstrings", TestPythonWorker);
         RunTest("12. Budget Selection: Coherent Chains & Auto Comment Mode", TestBudgetSelection);
         await RunTestAsync("13. End-to-End CLI: Full Context Generation", TestCliEndToEnd);
+        await RunTestAsync("14. C# Member Access: Constant Interface Reference Traversal", TestConstantInterfaceMemberAccess);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -205,6 +206,31 @@ public class Program
         Assert(fragment.Nodes.Any(n => n.DisplayName == "CustomerService"), "CustomerService class discovered");
         Assert(fragment.Nodes.Any(n => n.DisplayName == "ICustomerService"), "ICustomerService interface discovered");
         Assert(fragment.Nodes.Any(n => n.DisplayName == "CustomerRepository"), "CustomerRepository constructor dependency discovered");
+    }
+
+    private static async Task TestConstantInterfaceMemberAccess()
+    {
+        string root = ResolveFixture("tests/fixtures/dotnet/FanOptionHandler.cs");
+        string ws = ResolveFixture("tests/fixtures/dotnet");
+        var analyzer = new DotNetAnalyzer();
+        var fragment = analyzer.Analyze(root, ws, new UserConfiguration());
+
+        Assert(fragment.Nodes.Any(n => n.DisplayName == "FanOptionHandler"), "FanOptionHandler class discovered");
+        Assert(fragment.Nodes.Any(n => n.DisplayName == "CommonValues"), "CommonValues interface discovered via member access");
+        Assert(fragment.Edges.Any(e => e.TargetNodeId.Contains("CommonValues.cs")), "Edge to CommonValues.cs discovered");
+
+        var orchestrator = new ContextOrchestrator();
+        orchestrator.RegisterAdapter(new DotNetAdapter());
+        var result = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.CSharp
+        });
+
+        Assert(result.Success, $"Orchestration succeeded: [{result.ErrorCode}] {result.ErrorMessage}");
+        Assert(result.GeneratedMarkdown!.Contains("CommonValues.cs"), "CommonValues.cs included in generated Markdown context");
+        Assert(result.GeneratedMarkdown.Contains("Fan_Name"), "Fan_Name constant included in generated Markdown context");
     }
 
     private static void TestBlazorAnalyzer()

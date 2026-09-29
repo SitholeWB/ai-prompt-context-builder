@@ -42,9 +42,15 @@ public class DotNetAnalyzer
 
         // Map of type name to declaring file paths for project-level symbol resolution
         var workspaceFiles = Directory.Exists(workspaceRoot)
-            ? Directory.GetFiles(workspaceRoot, "*.cs", SearchOption.AllDirectories)
-                .Concat(Directory.GetFiles(workspaceRoot, "*.razor", SearchOption.AllDirectories))
-                .Concat(Directory.GetFiles(workspaceRoot, "*.cshtml", SearchOption.AllDirectories))
+            ? Directory.GetFiles(workspaceRoot, "*.*", SearchOption.AllDirectories)
+                .Where(f =>
+                {
+                    string fExt = Path.GetExtension(f).ToLowerInvariant();
+                    if (fExt is not (".cs" or ".razor" or ".cshtml")) return false;
+                    string norm = f.Replace('\\', '/');
+                    return !norm.Contains("/bin/") && !norm.Contains("/obj/") &&
+                           !norm.Contains("/.git/") && !norm.Contains("/.vs/");
+                })
                 .ToList()
             : new List<string> { normalizedRoot };
 
@@ -104,171 +110,324 @@ public class DotNetAnalyzer
         var namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().ToList();
         string currentNamespace = namespaces.FirstOrDefault()?.Name.ToString() ?? string.Empty;
 
+        // Static and aliased usings (e.g. using static CommonValues; using C = CommonValues;)
+        foreach (var u in root.Usings)
+        {
+            if (u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) && u.Name != null)
+            {
+                string staticTypeName = u.Name.ToString().Split('.').Last();
+                ResolveAndLinkType(fileNodeId, staticTypeName, RelationshipType.Import, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+            else if (u.Alias != null && u.Name != null)
+            {
+                string aliasTypeName = u.Name.ToString().Split('.').Last();
+                ResolveAndLinkType(fileNodeId, aliasTypeName, RelationshipType.Import, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
         // Discovered declared types (Classes, Interfaces, Records, Structs, Enums)
         var typeDeclarations = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().ToList();
 
-        foreach (var typeDecl in typeDeclarations)
+        if (typeDeclarations.Count == 0)
         {
-            string typeName = typeDecl.Identifier.Text;
-            string qualifiedName = string.IsNullOrEmpty(currentNamespace) ? typeName : $"{currentNamespace}.{typeName}";
-            string typeNodeId = $"type:{relPath}#{qualifiedName}";
-
-            NodeKind kind = typeDecl switch
+            // Top-level statements or file-scoped code
+            ExtractDependenciesFromContainer(root, fileNodeId, filePath, workspaceRoot, fragment, queue, visitedFiles, typeToFileIndex, config);
+        }
+        else
+        {
+            foreach (var typeDecl in typeDeclarations)
             {
-                ClassDeclarationSyntax => NodeKind.Class,
-                InterfaceDeclarationSyntax => NodeKind.Interface,
-                RecordDeclarationSyntax => NodeKind.Record,
-                StructDeclarationSyntax => NodeKind.Struct,
-                EnumDeclarationSyntax => NodeKind.Enum,
-                _ => NodeKind.Type
-            };
+                string typeName = typeDecl.Identifier.Text;
+                string qualifiedName = string.IsNullOrEmpty(currentNamespace) ? typeName : $"{currentNamespace}.{typeName}";
+                string typeNodeId = $"type:{relPath}#{qualifiedName}";
 
-            var typeNode = new GraphNode
-            {
-                Id = typeNodeId,
-                Kind = kind,
-                Language = "CSharp",
-                AnalysisLevel = CapabilityLevel.Semantic,
-                DisplayName = typeName,
-                QualifiedName = qualifiedName,
-                RelativePath = relPath,
-                SourceAvailable = true
-            };
-            fragment.Nodes.Add(typeNode);
-
-            // Connect file -> type
-            fragment.Edges.Add(new GraphEdge
-            {
-                SourceNodeId = fileNodeId,
-                TargetNodeId = typeNodeId,
-                Relationship = RelationshipType.Export,
-                Confidence = Confidence.Verified,
-                AnalysisLevel = CapabilityLevel.Semantic
-            });
-
-            // 1. Base types and implemented interfaces
-            if (typeDecl.BaseList != null)
-            {
-                foreach (var baseType in typeDecl.BaseList.Types)
+                NodeKind kind = typeDecl switch
                 {
-                    string refName = GetSimpleTypeName(baseType.Type);
-                    bool isInterface = refName.StartsWith("I") && refName.Length > 1 && char.IsUpper(refName[1]);
-                    var rel = isInterface ? RelationshipType.Interface : RelationshipType.BaseType;
+                    ClassDeclarationSyntax => NodeKind.Class,
+                    InterfaceDeclarationSyntax => NodeKind.Interface,
+                    RecordDeclarationSyntax => NodeKind.Record,
+                    StructDeclarationSyntax => NodeKind.Struct,
+                    EnumDeclarationSyntax => NodeKind.Enum,
+                    _ => NodeKind.Type
+                };
 
-                    ResolveAndLinkType(typeNodeId, refName, rel, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-                }
-            }
-
-            // 2. Constructors & Injected Services
-            var constructors = typeDecl.DescendantNodes().OfType<ConstructorDeclarationSyntax>();
-            foreach (var ctor in constructors)
-            {
-                foreach (var param in ctor.ParameterList.Parameters)
+                var typeNode = new GraphNode
                 {
-                    if (param.Type != null)
+                    Id = typeNodeId,
+                    Kind = kind,
+                    Language = "CSharp",
+                    AnalysisLevel = CapabilityLevel.Semantic,
+                    DisplayName = typeName,
+                    QualifiedName = qualifiedName,
+                    RelativePath = relPath,
+                    SourceAvailable = true
+                };
+                fragment.Nodes.Add(typeNode);
+
+                // Connect file -> type
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = typeNodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.Semantic
+                });
+
+                // 1. Base types and implemented interfaces
+                if (typeDecl.BaseList != null)
+                {
+                    foreach (var baseType in typeDecl.BaseList.Types)
                     {
-                        string paramTypeName = GetSimpleTypeName(param.Type);
-                        ResolveAndLinkType(typeNodeId, paramTypeName, RelationshipType.ConstructorDependency, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
+                        string refName = GetSimpleTypeName(baseType.Type);
+                        bool isInterface = refName.StartsWith("I") && refName.Length > 1 && char.IsUpper(refName[1]);
+                        var rel = isInterface ? RelationshipType.Interface : RelationshipType.BaseType;
+
+                        ResolveAndLinkType(typeNodeId, refName, rel, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
                     }
                 }
-            }
 
-            // 3. Properties
-            var properties = typeDecl.DescendantNodes().OfType<PropertyDeclarationSyntax>();
-            foreach (var prop in properties)
-            {
-                string propTypeName = GetSimpleTypeName(prop.Type);
-                ResolveAndLinkType(typeNodeId, propTypeName, RelationshipType.PropertyType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-            }
-
-            // 4. Fields
-            var fields = typeDecl.DescendantNodes().OfType<FieldDeclarationSyntax>();
-            foreach (var field in fields)
-            {
-                string fieldTypeName = GetSimpleTypeName(field.Declaration.Type);
-                ResolveAndLinkType(typeNodeId, fieldTypeName, RelationshipType.FieldType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-            }
-
-            // 5. Methods (Parameters, Return Types)
-            var methods = typeDecl.DescendantNodes().OfType<MethodDeclarationSyntax>();
-            foreach (var method in methods)
-            {
-                if (method.ReturnType != null && method.ReturnType.ToString() != "void" && method.ReturnType.ToString() != "Task")
+                // 2. Constructors & Injected Services
+                var constructors = typeDecl.DescendantNodes().OfType<ConstructorDeclarationSyntax>();
+                foreach (var ctor in constructors)
                 {
-                    string retTypeName = GetSimpleTypeName(method.ReturnType);
-                    ResolveAndLinkType(typeNodeId, retTypeName, RelationshipType.ReturnType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-                }
-
-                foreach (var param in method.ParameterList.Parameters)
-                {
-                    if (param.Type != null)
+                    foreach (var param in ctor.ParameterList.Parameters)
                     {
-                        string paramTypeName = GetSimpleTypeName(param.Type);
-                        ResolveAndLinkType(typeNodeId, paramTypeName, RelationshipType.ParameterType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-                    }
-                }
-            }
-
-            // 6. Object Creations (new T())
-            var creations = typeDecl.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
-            foreach (var creation in creations)
-            {
-                string creationTypeName = GetSimpleTypeName(creation.Type);
-                ResolveAndLinkType(typeNodeId, creationTypeName, RelationshipType.ObjectCreation, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-            }
-
-            // 7. Generic Arguments (<T>)
-            var genericNodes = typeDecl.DescendantNodes().OfType<GenericNameSyntax>();
-            foreach (var gen in genericNodes)
-            {
-                foreach (var arg in gen.TypeArgumentList.Arguments)
-                {
-                    string argName = GetSimpleTypeName(arg);
-                    ResolveAndLinkType(typeNodeId, argName, RelationshipType.GenericArgument, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-                }
-            }
-
-            // 8. Attributes
-            if (config.IncludeAttributes)
-            {
-                foreach (var attrList in typeDecl.AttributeLists)
-                {
-                    foreach (var attr in attrList.Attributes)
-                    {
-                        string attrName = attr.Name.ToString();
-                        ResolveAndLinkType(typeNodeId, attrName, RelationshipType.Attribute, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot);
-                    }
-                }
-            }
-
-            // 9. Partial classes in other files
-            if (typeDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
-            {
-                if (typeToFileIndex.TryGetValue(typeName, out var matchingFiles))
-                {
-                    foreach (var partialFile in matchingFiles)
-                    {
-                        if (!string.Equals(partialFile, filePath, StringComparison.OrdinalIgnoreCase))
+                        if (param.Type != null)
                         {
-                            string partialRel = Path.GetRelativePath(workspaceRoot, partialFile).Replace('\\', '/');
-                            string partialFileId = $"file:{partialRel}";
+                            string paramTypeName = GetSimpleTypeName(param.Type);
+                            ResolveAndLinkType(typeNodeId, paramTypeName, RelationshipType.ConstructorDependency, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                        }
+                    }
+                }
 
-                            fragment.Edges.Add(new GraphEdge
-                            {
-                                SourceNodeId = fileNodeId,
-                                TargetNodeId = partialFileId,
-                                Relationship = RelationshipType.PartialDeclaration,
-                                Confidence = Confidence.Verified,
-                                AnalysisLevel = CapabilityLevel.Semantic
-                            });
+                // 3. Properties
+                var properties = typeDecl.DescendantNodes().OfType<PropertyDeclarationSyntax>();
+                foreach (var prop in properties)
+                {
+                    string propTypeName = GetSimpleTypeName(prop.Type);
+                    ResolveAndLinkType(typeNodeId, propTypeName, RelationshipType.PropertyType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                }
 
-                            if (visitedFiles.Add(partialFile))
+                // 4. Fields
+                var fields = typeDecl.DescendantNodes().OfType<FieldDeclarationSyntax>();
+                foreach (var field in fields)
+                {
+                    string fieldTypeName = GetSimpleTypeName(field.Declaration.Type);
+                    ResolveAndLinkType(typeNodeId, fieldTypeName, RelationshipType.FieldType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                }
+
+                // 5. Methods (Parameters, Return Types)
+                var methods = typeDecl.DescendantNodes().OfType<MethodDeclarationSyntax>();
+                foreach (var method in methods)
+                {
+                    if (method.ReturnType != null && method.ReturnType.ToString() != "void" && method.ReturnType.ToString() != "Task")
+                    {
+                        string retTypeName = GetSimpleTypeName(method.ReturnType);
+                        ResolveAndLinkType(typeNodeId, retTypeName, RelationshipType.ReturnType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                    }
+
+                    foreach (var param in method.ParameterList.Parameters)
+                    {
+                        if (param.Type != null)
+                        {
+                            string paramTypeName = GetSimpleTypeName(param.Type);
+                            ResolveAndLinkType(typeNodeId, paramTypeName, RelationshipType.ParameterType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                        }
+                    }
+                }
+
+                // 6. Attributes
+                if (config.IncludeAttributes)
+                {
+                    foreach (var attrList in typeDecl.AttributeLists)
+                    {
+                        foreach (var attr in attrList.Attributes)
+                        {
+                            string attrName = attr.Name.ToString();
+                            ResolveAndLinkType(typeNodeId, attrName, RelationshipType.Attribute, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                        }
+                    }
+                }
+
+                // 7. Partial classes in other files
+                if (typeDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+                {
+                    if (typeToFileIndex.TryGetValue(typeName, out var matchingFiles))
+                    {
+                        foreach (var partialFile in matchingFiles)
+                        {
+                            if (!string.Equals(partialFile, filePath, StringComparison.OrdinalIgnoreCase))
                             {
-                                queue.Enqueue(partialFile);
+                                string partialRel = Path.GetRelativePath(workspaceRoot, partialFile).Replace('\\', '/');
+                                string partialFileId = $"file:{partialRel}";
+
+                                fragment.Edges.Add(new GraphEdge
+                                {
+                                    SourceNodeId = fileNodeId,
+                                    TargetNodeId = partialFileId,
+                                    Relationship = RelationshipType.PartialDeclaration,
+                                    Confidence = Confidence.Verified,
+                                    AnalysisLevel = CapabilityLevel.Semantic
+                                });
+
+                                if (visitedFiles.Add(partialFile))
+                                {
+                                    queue.Enqueue(partialFile);
+                                }
                             }
                         }
                     }
                 }
+
+                // 8. Comprehensive expressions & member references inside type (constants, static classes, enums, casts, locals, new T())
+                ExtractDependenciesFromContainer(typeDecl, typeNodeId, filePath, workspaceRoot, fragment, queue, visitedFiles, typeToFileIndex, config);
+            }
+        }
+    }
+
+    private void ExtractDependenciesFromContainer(
+        SyntaxNode container,
+        string sourceNodeId,
+        string filePath,
+        string workspaceRoot,
+        DependencyGraphFragment fragment,
+        Queue<string> queue,
+        HashSet<string> visitedFiles,
+        Dictionary<string, List<string>> typeToFileIndex,
+        UserConfiguration config)
+    {
+        // 1. Member Access Expressions (Constants, Enums, Static Methods/Fields, e.g. CommonValues.Fan_Name)
+        var memberAccesses = container.DescendantNodes().OfType<MemberAccessExpressionSyntax>();
+        foreach (var ma in memberAccesses)
+        {
+            foreach (var targetName in ExtractTargetTypeNames(ma.Expression))
+            {
+                var rel = (ma.Parent is InvocationExpressionSyntax)
+                    ? RelationshipType.MethodCall
+                    : RelationshipType.FieldType;
+                ResolveAndLinkType(sourceNodeId, targetName, rel, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 2. Conditional Access Expressions (e.g. CommonValues?.Fan_Name)
+        var condAccesses = container.DescendantNodes().OfType<ConditionalAccessExpressionSyntax>();
+        foreach (var ca in condAccesses)
+        {
+            foreach (var targetName in ExtractTargetTypeNames(ca.Expression))
+            {
+                ResolveAndLinkType(sourceNodeId, targetName, RelationshipType.FieldType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 3. Local Variable Declarations (e.g. CommonValues cv = ...)
+        var varDecls = container.DescendantNodes().OfType<VariableDeclarationSyntax>();
+        foreach (var vd in varDecls)
+        {
+            string vTypeName = GetSimpleTypeName(vd.Type);
+            if (vTypeName != "var")
+            {
+                ResolveAndLinkType(sourceNodeId, vTypeName, RelationshipType.LocalType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 4. Object Creations (new T())
+        var creations = container.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
+        foreach (var creation in creations)
+        {
+            string creationTypeName = GetSimpleTypeName(creation.Type);
+            ResolveAndLinkType(sourceNodeId, creationTypeName, RelationshipType.ObjectCreation, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+        }
+
+        // 5. Generic Arguments (<T>)
+        var genericNodes = container.DescendantNodes().OfType<GenericNameSyntax>();
+        foreach (var gen in genericNodes)
+        {
+            foreach (var arg in gen.TypeArgumentList.Arguments)
+            {
+                string argName = GetSimpleTypeName(arg);
+                ResolveAndLinkType(sourceNodeId, argName, RelationshipType.GenericArgument, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 6. Cast Expressions ((CommonValues)obj)
+        var casts = container.DescendantNodes().OfType<CastExpressionSyntax>();
+        foreach (var c in casts)
+        {
+            string cTypeName = GetSimpleTypeName(c.Type);
+            ResolveAndLinkType(sourceNodeId, cTypeName, RelationshipType.ConversionType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+        }
+
+        // 7. Type Pattern Matching, is/as expressions
+        var binaryExpressions = container.DescendantNodes().OfType<BinaryExpressionSyntax>();
+        foreach (var bin in binaryExpressions)
+        {
+            if (bin.IsKind(SyntaxKind.IsExpression) || bin.IsKind(SyntaxKind.AsExpression))
+            {
+                if (bin.Right is TypeSyntax rt)
+                {
+                    string tName = GetSimpleTypeName(rt);
+                    ResolveAndLinkType(sourceNodeId, tName, RelationshipType.LocalType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+                }
+            }
+        }
+
+        var isPatterns = container.DescendantNodes().OfType<IsPatternExpressionSyntax>();
+        foreach (var ip in isPatterns)
+        {
+            if (ip.Pattern is DeclarationPatternSyntax dec)
+            {
+                string pType = GetSimpleTypeName(dec.Type);
+                ResolveAndLinkType(sourceNodeId, pType, RelationshipType.LocalType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+            else if (ip.Pattern is TypePatternSyntax tp)
+            {
+                string pType = GetSimpleTypeName(tp.Type);
+                ResolveAndLinkType(sourceNodeId, pType, RelationshipType.LocalType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 8. typeof(T) and default(T)
+        foreach (var to in container.DescendantNodes().OfType<TypeOfExpressionSyntax>())
+        {
+            string tName = GetSimpleTypeName(to.Type);
+            ResolveAndLinkType(sourceNodeId, tName, RelationshipType.LocalType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+        }
+
+        foreach (var de in container.DescendantNodes().OfType<DefaultExpressionSyntax>())
+        {
+            string tName = GetSimpleTypeName(de.Type);
+            ResolveAndLinkType(sourceNodeId, tName, RelationshipType.LocalType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+        }
+
+        // 9. Exception Catch Clauses (catch (CustomException ex))
+        foreach (var catchDecl in container.DescendantNodes().OfType<CatchDeclarationSyntax>())
+        {
+            if (catchDecl.Type != null)
+            {
+                string exType = GetSimpleTypeName(catchDecl.Type);
+                ResolveAndLinkType(sourceNodeId, exType, RelationshipType.ExceptionType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
+            }
+        }
+
+        // 10. General Identifier Safety-Net (Any reference to a known project type in expressions)
+        var allIds = container.DescendantNodes().OfType<IdentifierNameSyntax>();
+        foreach (var id in allIds)
+        {
+            if (id.Parent is BaseNamespaceDeclarationSyntax || id.Parent is NamespaceDeclarationSyntax || id.Parent is FileScopedNamespaceDeclarationSyntax)
+                continue;
+
+            // Skip member names being accessed on an instance (e.g. 'opt.Name' where Name is property)
+            // UNLESS the expression is a known workspace type (like CommonValues in CommonValues.Fan_Name)
+            if (id.Parent is MemberAccessExpressionSyntax ma && ma.Name == id)
+            {
+                continue;
+            }
+
+            string idText = id.Identifier.Text;
+            if (typeToFileIndex.ContainsKey(idText))
+            {
+                ResolveAndLinkType(sourceNodeId, idText, RelationshipType.FieldType, fragment, queue, visitedFiles, typeToFileIndex, workspaceRoot, filePath);
             }
         }
     }
@@ -420,7 +579,8 @@ public class DotNetAnalyzer
         Queue<string> queue,
         HashSet<string> visitedFiles,
         Dictionary<string, List<string>> typeToFileIndex,
-        string workspaceRoot)
+        string workspaceRoot,
+        string currentFilePath)
     {
         if (IsBuiltInSystemType(typeName)) return;
 
@@ -428,23 +588,54 @@ public class DotNetAnalyzer
         {
             foreach (var targetFile in targetFiles)
             {
+                if (string.Equals(targetFile, currentFilePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 string targetRel = Path.GetRelativePath(workspaceRoot, targetFile).Replace('\\', '/');
                 string targetNodeId = $"file:{targetRel}";
 
-                fragment.Edges.Add(new GraphEdge
+                if (!fragment.Edges.Any(e => e.SourceNodeId == sourceNodeId && e.TargetNodeId == targetNodeId && e.Relationship == relationship))
                 {
-                    SourceNodeId = sourceNodeId,
-                    TargetNodeId = targetNodeId,
-                    Relationship = relationship,
-                    Confidence = Confidence.Verified,
-                    AnalysisLevel = CapabilityLevel.Semantic
-                });
+                    fragment.Edges.Add(new GraphEdge
+                    {
+                        SourceNodeId = sourceNodeId,
+                        TargetNodeId = targetNodeId,
+                        Relationship = relationship,
+                        Confidence = Confidence.Verified,
+                        AnalysisLevel = CapabilityLevel.Semantic
+                    });
+                }
 
                 if (visitedFiles.Add(targetFile))
                 {
                     queue.Enqueue(targetFile);
                 }
             }
+        }
+    }
+
+    private IEnumerable<string> ExtractTargetTypeNames(ExpressionSyntax? expr)
+    {
+        if (expr == null) yield break;
+
+        if (expr is IdentifierNameSyntax id)
+        {
+            yield return id.Identifier.Text;
+        }
+        else if (expr is MemberAccessExpressionSyntax ma)
+        {
+            yield return ma.Name.Identifier.Text;
+            foreach (var sub in ExtractTargetTypeNames(ma.Expression))
+            {
+                yield return sub;
+            }
+        }
+        else if (expr is QualifiedNameSyntax q)
+        {
+            yield return q.Right.Identifier.Text;
+            yield return q.Left.ToString().Split('.').Last();
         }
     }
 
@@ -482,7 +673,7 @@ public class DotNetAnalyzer
                     string text = File.ReadAllText(file);
                     var matches = System.Text.RegularExpressions.Regex.Matches(
                         text,
-                        @"\b(?:class|interface|record|struct|enum)\s+([A-Za-z0-9_]+)");
+                        @"\b(?:class|interface|struct|enum|record(?:\s+(?:class|struct))?)\s+([A-Za-z0-9_]+)");
 
                     foreach (System.Text.RegularExpressions.Match m in matches)
                     {
@@ -492,7 +683,10 @@ public class DotNetAnalyzer
                             list = new List<string>();
                             index[name] = list;
                         }
-                        list.Add(file);
+                        if (!list.Contains(file))
+                        {
+                            list.Add(file);
+                        }
                     }
                 }
                 catch { }
@@ -505,7 +699,10 @@ public class DotNetAnalyzer
                     list = new List<string>();
                     index[componentName] = list;
                 }
-                list.Add(file);
+                if (!list.Contains(file))
+                {
+                    list.Add(file);
+                }
             }
         }
         return index;
@@ -534,9 +731,11 @@ public class DotNetAnalyzer
     private bool IsBuiltInSystemType(string name)
     {
         return name is "string" or "int" or "bool" or "void" or "long" or "double" or
-                       "float" or "decimal" or "char" or "byte" or "object" or "Task" or
-                       "ValueTask" or "IEnumerable" or "List" or "Dictionary" or "HashSet" or
-                       "Action" or "Func" or "IDisposable" or "DateTime" or "Guid" or
-                       "CancellationToken";
+                       "float" or "decimal" or "char" or "byte" or "sbyte" or "short" or
+                       "ushort" or "uint" or "ulong" or "nint" or "nuint" or "object" or
+                       "Task" or "ValueTask" or "IEnumerable" or "List" or "Dictionary" or
+                       "HashSet" or "Action" or "Func" or "IDisposable" or "IAsyncDisposable" or
+                       "DateTime" or "DateTimeOffset" or "TimeSpan" or "DateOnly" or "TimeOnly" or
+                       "Guid" or "CancellationToken" or "var" or "dynamic";
     }
 }

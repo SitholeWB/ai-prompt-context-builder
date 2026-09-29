@@ -98,7 +98,20 @@ public static class RootTargetResolver
             };
         }
 
-        // Multiple candidates
+        // Multiple candidates: check if one matches the filename
+        string fileNameWithoutExt = Path.GetFileNameWithoutExtension(rootFilePath);
+        var matchingName = declarationNodes.FirstOrDefault(n => string.Equals(n.DisplayName, fileNameWithoutExt, StringComparison.OrdinalIgnoreCase));
+        if (matchingName != null)
+        {
+            return new RootSelectionResult
+            {
+                RootNodeId = matchingName.Id,
+                RootSymbol = !string.IsNullOrEmpty(matchingName.QualifiedName) ? matchingName.QualifiedName : matchingName.DisplayName,
+                IsSingleCandidate = true,
+                Candidates = new List<string> { matchingName.QualifiedName }
+            };
+        }
+
         var allCandidates = declarationNodes.Select(n => !string.IsNullOrEmpty(n.QualifiedName) ? n.QualifiedName : n.DisplayName).ToList();
         var fallbackFile = nodesInRootFile.FirstOrDefault(n => n.Kind == NodeKind.File);
 
