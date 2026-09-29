@@ -59,6 +59,11 @@ public class Program
         await RunTestAsync("29. Event Subscribers & CQRS: Command / Event Handler Traversal", TestDotNetEventSubscribersAndCQRS);
         await RunTestAsync("30. Class Attributes & Decorators: typeof Filter Parameter Resolution", TestDotNetAttributesAndTypeofFilters);
         RunTest("31. Noise & Toolchain Filtering: Lockfiles & Config Exclusion", TestLockFilesAndToolchainConfigsExcluded);
+        await RunTestAsync("32. Rust Ecosystem: Modules, Use Paths & Trait Implementation Resolution", TestRustOrchestration);
+        await RunTestAsync("33. Kotlin Ecosystem: Package, Imports & Class Implementation Resolution", TestKotlinOrchestration);
+        await RunTestAsync("34. PHP Ecosystem: PSR-4 Namespaces, Attributes & Interface Resolution", TestPhpOrchestration);
+        await RunTestAsync("35. Dart / Flutter: Parts, Companion Models & Widget Traversal", TestDartOrchestration);
+        await RunTestAsync("36. C / C++: Companion Header/Source & Include Hierarchy", TestCppOrchestration);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -648,6 +653,103 @@ public class Program
         Assert(EcosystemFilters.IsGeneratedFile("yarn.lock"), "yarn.lock is excluded as lockfile");
         Assert(EcosystemFilters.IsGeneratedFile("tsconfig.json"), "tsconfig.json is excluded as toolchain config");
         Assert(EcosystemFilters.IsConfigFile("tsconfig.json"), "tsconfig.json is identified as config file");
+    }
+
+    private static async Task TestRustOrchestration()
+    {
+        string root = ResolveFixture("tests/fixtures/rust/order.rs");
+        string ws = ResolveFixture("tests/fixtures/rust");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Rust,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Rust orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("order.rs"), "order.rs included");
+        Assert(res.GeneratedMarkdown.Contains("repository.rs"), "repository.rs discovered via use/trait implementation");
+    }
+
+    private static async Task TestKotlinOrchestration()
+    {
+        string root = ResolveFixture("tests/fixtures/kotlin/OrderService.kt");
+        string ws = ResolveFixture("tests/fixtures/kotlin");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Kotlin,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Kotlin orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("OrderService.kt"), "OrderService.kt included");
+        Assert(res.GeneratedMarkdown.Contains("OrderRepository.kt"), "OrderRepository.kt discovered via import & inheritance");
+    }
+
+    private static async Task TestPhpOrchestration()
+    {
+        string root = ResolveFixture("tests/fixtures/php/OrderService.php");
+        string ws = ResolveFixture("tests/fixtures/php");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Php,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"PHP orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("OrderService.php"), "OrderService.php included");
+        Assert(res.GeneratedMarkdown.Contains("OrderRepository.php"), "OrderRepository.php discovered via use statement");
+    }
+
+    private static async Task TestDartOrchestration()
+    {
+        string root = ResolveFixture("tests/fixtures/dart/order_page.dart");
+        string ws = ResolveFixture("tests/fixtures/dart");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Dart,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"Dart orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("order_page.dart"), "order_page.dart included");
+        Assert(res.GeneratedMarkdown.Contains("order_page.g.dart"), "order_page.g.dart discovered as companion part");
+        Assert(res.GeneratedMarkdown.Contains("order_model.dart"), "order_model.dart discovered as imported model");
+    }
+
+    private static async Task TestCppOrchestration()
+    {
+        string root = ResolveFixture("tests/fixtures/cpp/OrderService.cpp");
+        string ws = ResolveFixture("tests/fixtures/cpp");
+        var orchestrator = new ContextOrchestrator();
+
+        var res = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Cpp,
+            SaveToFile = false
+        });
+
+        Assert(res.Success, $"C++ orchestration succeeded: {res.ErrorMessage}");
+        Assert(res.GeneratedMarkdown!.Contains("OrderService.cpp"), "OrderService.cpp included");
+        Assert(res.GeneratedMarkdown.Contains("OrderService.h"), "OrderService.h discovered as companion header");
+        Assert(res.GeneratedMarkdown.Contains("IOrderService.h"), "IOrderService.h discovered as included base class header");
     }
 
     private static void Assert(bool condition, string message)

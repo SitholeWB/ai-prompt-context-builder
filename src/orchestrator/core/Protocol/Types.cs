@@ -127,7 +127,13 @@ public enum LanguageName
     Python,
     Go,
     Razor,
-    Vue
+    Vue,
+    Rust,
+    Kotlin,
+    Php,
+    Dart,
+    Cpp,
+    C
 }
 
 public enum FrameworkName

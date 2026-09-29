@@ -29,7 +29,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.7");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.0.8");
             return 0;
         }
 
@@ -38,6 +38,11 @@ public class Program
             Console.WriteLine("Checking installed workers and language engines...");
             Console.WriteLine("  [x] .NET 10 / Roslyn Worker:     Active (In-Process, Full Semantic AST)");
             Console.WriteLine("  [x] Java & Go Analyzers:          Active (In-Process, Syntax AST)");
+            Console.WriteLine("  [x] Rust Analyzer:                Active (In-Process, Module & Trait AST)");
+            Console.WriteLine("  [x] Kotlin Analyzer:              Active (In-Process, Extension & Syntax AST)");
+            Console.WriteLine("  [x] PHP Analyzer:                 Active (In-Process, PSR-4 & Trait AST)");
+            Console.WriteLine("  [x] Dart / Flutter Analyzer:      Active (In-Process, Part & Widget AST)");
+            Console.WriteLine("  [x] C / C++ Analyzer:             Active (In-Process, Header & Include AST)");
             Console.WriteLine("  [x] HTML/CSS/SCSS Analyzers:      Active (In-Process, Built-in)");
             
             // Check Node.js
@@ -316,7 +321,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.7
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.8
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:

@@ -66,6 +66,11 @@ public class ContextOrchestrator
         _adapters.Add(new PythonWorkerAdapter());
         _adapters.Add(new JavaAdapter());
         _adapters.Add(new GoAdapter());
+        _adapters.Add(new RustAdapter());
+        _adapters.Add(new KotlinAdapter());
+        _adapters.Add(new PhpAdapter());
+        _adapters.Add(new DartAdapter());
+        _adapters.Add(new CppAdapter());
     }
 
     public async Task<OrchestrationResult> GenerateContextAsync(
@@ -342,6 +347,12 @@ public class ContextOrchestrator
             ".go" => "Go",
             ".razor" or ".cshtml" => "Razor",
             ".vue" => "Vue",
+            ".rs" => "Rust",
+            ".kt" or ".kts" => "Kotlin",
+            ".php" => "Php",
+            ".dart" => "Dart",
+            ".cpp" or ".cc" or ".cxx" or ".hpp" or ".hxx" => "Cpp",
+            ".c" or ".h" => "C",
             _ => "Unknown"
         };
     }

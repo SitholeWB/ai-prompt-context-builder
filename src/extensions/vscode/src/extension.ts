@@ -290,6 +290,8 @@ function resolveCommand(extraArgs: string[]): CommandSpec {
     options: { shell: process.platform === 'win32' },
     description: fallback,
   };
+}
+
 async function promptAndRunCustomOptions(filePath: string) {
   // Step 1: Token Budget
   const budgetPick = await vscode.window.showQuickPick(

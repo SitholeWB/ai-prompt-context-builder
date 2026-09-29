@@ -145,6 +145,11 @@ Every analyzer explicitly discloses its capability level in the generated Markdo
 | **Python** | `.py` | Python 3 `ast` & `tokenize` Worker | Built-in Syntax Engine | **Semantic / SyntaxAware** |
 | **Java** | `.java` | Java Syntax & Same-Package Type Analyzer | Built-in (In-process) | **SyntaxAware** |
 | **Go** | `.go` | Go Packages & `go.mod` Syntax Analyzer | Built-in (In-process) | **SyntaxAware** |
+| **Rust** | `.rs` | Rust Modules, `use` Segments & Trait `impl` | Built-in (In-process) | **SyntaxAware** |
+| **Kotlin** | `.kt`, `.kts` | Kotlin Packages, Imports & Extension Functions | Built-in (In-process) | **SyntaxAware** |
+| **PHP** | `.php` | PHP 8 Attributes, PSR-4 Namespaces & Traits | Built-in (In-process) | **SyntaxAware** |
+| **Dart / Flutter** | `.dart` | Flutter Widgets, `part`/`part of` & Bloc Events | Built-in (In-process) | **SyntaxAware + CompanionFile** |
+| **C / C++** | `.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp` | `#include` Hierarchy & Companion Header/Source | Built-in (In-process) | **SyntaxAware + CompanionFile** |
 | **JSON / YAML Config**| `.json`, `.yaml`, `.yml`| Explicitly Referenced Configuration Analyzer | Built-in (In-process) | **ImportGraph** |
 
 

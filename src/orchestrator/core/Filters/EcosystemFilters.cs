@@ -21,14 +21,15 @@ public static class EcosystemFilters
         "packages.lock.json", "poetry.lock", "composer.lock", "gemfile.lock",
         "tsconfig.json", "tsconfig.node.json", "tsconfig.app.json", "jsconfig.json",
         ".eslintrc.json", ".eslintrc.js", ".prettierrc", ".editorconfig",
-        "bun.lockb"
+        "bun.lockb", "pubspec.lock"
     };
 
     private static readonly string[] GeneratedDirs = new[]
     {
         "/obj/", "/bin/", "/dist/", "/build/", "/out/", "/coverage/",
         "/target/", "/target/generated-sources/", "/build/generated/",
-        "/__pycache__/", "/.next/", "/.nuxt/", "/.turbo/", "/migrations/"
+        "/__pycache__/", "/.next/", "/.nuxt/", "/.turbo/", "/migrations/",
+        "/.dart_tool/", "/vendor/", "/.gradle/", "/CMakeFiles/"
     };
 
     private static readonly string[] GeneratedSuffixes = new[]
