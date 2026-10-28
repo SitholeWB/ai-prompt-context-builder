@@ -78,6 +78,11 @@ public class ContextOrchestrator
         Action<int, string>? progressCallback = null,
         CancellationToken cancellationToken = default)
     {
+        if (config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly)
+        {
+            return await GenerateGitWorkspaceContextAsync(config, progressCallback, cancellationToken);
+        }
+
         string rootFullPath = Path.GetFullPath(config.RootPath);
         if (!File.Exists(rootFullPath))
         {
@@ -276,9 +281,21 @@ public class ContextOrchestrator
             Framework = detectedFrameworks.Count > 0 ? string.Join(", ", detectedFrameworks) : (config.Framework != FrameworkName.Auto ? config.Framework.ToString() : "None"),
             AnalysisLevel = CapabilityLevel.Semantic,
             FilesDiscovered = allDiscoveredFiles.Count,
-            Warnings = allWarnings,
+            Warnings = allWarnings.Distinct().ToList(),
             DependencyTreeText = graph.RenderDependencyTree(rootTarget.RootNodeId)
         };
+
+        if (config.GitScope == GitScopeMode.SingleFile)
+        {
+            var singleGit = GitDiffService.ResolveGitChanges(wsRoot, GitScopeMode.SingleFile, rootFullPath);
+            metadata.GitScopeDescription = singleGit.ScopeDescription;
+            metadata.GitDiffText = singleGit.UnifiedDiff;
+            if (!string.IsNullOrWhiteSpace(singleGit.UnifiedDiff))
+            {
+                metadata.ModifiedFiles.Add(rootRelPath);
+                metadata.DependencyTreeText = graph.RenderDependencyTree(new[] { rootTarget.RootNodeId }, metadata.ModifiedFiles);
+            }
+        }
 
         string markdown = MarkdownGenerator.Generate(metadata, budgetResult, totalExcluded, config);
 
@@ -320,6 +337,250 @@ public class ContextOrchestrator
             CommentsApplied = budgetResult.CommentsApplied,
             BudgetMet = budgetResult.BudgetMet,
             Warnings = allWarnings,
+            Diagnostics = allDiagnostics,
+            SecretFindings = allSecretFindings,
+            GeneratedMarkdown = markdown
+        };
+    }
+
+    private async Task<OrchestrationResult> GenerateGitWorkspaceContextAsync(
+        UserConfiguration config,
+        Action<int, string>? progressCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        progressCallback?.Invoke(10, $"Resolving Git changes ({GitDiffService.GetScopeDescription(config.GitScope)})");
+
+        string startPath = !string.IsNullOrWhiteSpace(config.WorkspacePath)
+            ? config.WorkspacePath
+            : (!string.IsNullOrWhiteSpace(config.RootPath) ? config.RootPath : Directory.GetCurrentDirectory());
+
+        var gitResult = GitDiffService.ResolveGitChanges(startPath, config.GitScope);
+        if (!gitResult.IsGitRepository)
+        {
+            return new OrchestrationResult
+            {
+                Success = false,
+                ErrorCode = "WorkspaceNotFound",
+                ErrorMessage = gitResult.ErrorMessage ?? "No Git repository (.git) found in workspace."
+            };
+        }
+
+        if (gitResult.ModifiedAbsolutePaths.Count == 0)
+        {
+            return new OrchestrationResult
+            {
+                Success = false,
+                ErrorCode = "NoGitChanges",
+                ErrorMessage = $"No modified source files found for '{gitResult.ScopeDescription}'."
+            };
+        }
+
+        string wsRoot = !string.IsNullOrWhiteSpace(config.WorkspacePath) && Directory.Exists(config.WorkspacePath)
+            ? Path.GetFullPath(config.WorkspacePath)
+            : gitResult.GitRoot;
+
+        var graph = new DependencyGraph();
+        var allWarnings = new List<string>();
+        var allDiagnostics = new List<Diagnostic>();
+        var modifiedRelPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rootNodeIds = new List<string>();
+        var detectedLanguages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var visitedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        int totalModFiles = gitResult.ModifiedAbsolutePaths.Count;
+        for (int i = 0; i < totalModFiles; i++)
+        {
+            string absFile = gitResult.ModifiedAbsolutePaths[i];
+            string relFile = Path.GetRelativePath(wsRoot, absFile).Replace('\\', '/');
+            modifiedRelPaths.Add(relFile);
+            visitedFiles.Add(absFile);
+
+            string ext = Path.GetExtension(absFile).ToLowerInvariant();
+            string lang = DetectLanguage(ext, config.Language);
+            if (lang != "Unknown") detectedLanguages.Add(lang);
+
+            int pct = 20 + (int)((i / (double)Math.Max(1, totalModFiles)) * 35);
+            progressCallback?.Invoke(pct, $"Analyzing modified file ({i + 1}/{totalModFiles}): {Path.GetFileName(absFile)}");
+
+            var fragment = await AnalyzeWithAdapterAsync(absFile, wsRoot, lang, config, cancellationToken);
+            graph.MergeFragment(fragment);
+            allWarnings.AddRange(fragment.Warnings);
+            allDiagnostics.AddRange(fragment.Diagnostics);
+
+            var nodesInFile = graph.GetNodesByFile(relFile);
+            if (nodesInFile.Count == 0)
+            {
+                var rfNode = new GraphNode
+                {
+                    Id = $"file:{relFile}",
+                    Kind = NodeKind.File,
+                    Language = lang,
+                    AnalysisLevel = CapabilityLevel.Semantic,
+                    DisplayName = Path.GetFileName(absFile),
+                    QualifiedName = relFile,
+                    RelativePath = relFile,
+                    SourceAvailable = true,
+                    Content = File.ReadAllText(absFile)
+                };
+                graph.AddNode(rfNode);
+                rootNodeIds.Add(rfNode.Id);
+            }
+            else
+            {
+                var fileNode = nodesInFile.FirstOrDefault(n => n.Kind == NodeKind.File) ?? nodesInFile[0];
+                rootNodeIds.Add(fileNode.Id);
+            }
+        }
+
+        progressCallback?.Invoke(60, "Traversing transitive dependencies across workspace");
+
+        // Cross-language / transitive traversal for any discovered files not yet analyzed
+        var filesToProcess = new Queue<string>(graph.GetAllFiles().Select(f => Path.Combine(wsRoot, f)));
+        while (filesToProcess.Count > 0)
+        {
+            string currentFile = filesToProcess.Dequeue();
+            if (!visitedFiles.Add(currentFile)) continue;
+            if (!File.Exists(currentFile)) continue;
+
+            string curExt = Path.GetExtension(currentFile).ToLowerInvariant();
+            string curLang = DetectLanguage(curExt, LanguageName.Auto);
+            if (curLang != "Unknown") detectedLanguages.Add(curLang);
+
+            var secondaryFragment = await AnalyzeWithAdapterAsync(currentFile, wsRoot, curLang, config, cancellationToken);
+            graph.MergeFragment(secondaryFragment);
+            allWarnings.AddRange(secondaryFragment.Warnings);
+            allDiagnostics.AddRange(secondaryFragment.Diagnostics);
+        }
+
+        progressCallback?.Invoke(75, "Calculating multi-root importance scores & secret scanning");
+
+        // Multi-root Importance Scoring
+        ImportanceScorer.CalculateScores(graph, rootNodeIds);
+
+        var candidateFiles = new List<EvaluatedFile>();
+        var excludedFiles = new List<EvaluatedFile>();
+        var allDiscoveredFiles = graph.GetAllFiles().ToList();
+        var allSecretFindings = new List<SecretFinding>();
+
+        foreach (var relPath in allDiscoveredFiles)
+        {
+            string absPath = Path.Combine(wsRoot, relPath);
+            bool isRoot = modifiedRelPaths.Contains(relPath);
+            var nodesInFile = graph.GetNodesByFile(relPath);
+            int minDepth = isRoot ? 0 : (nodesInFile.Count > 0 ? nodesInFile.Min(n => n.Depth) : 99);
+            int maxImportance = isRoot ? 1000 : (nodesInFile.Count > 0 ? nodesInFile.Max(n => n.Importance) : 0);
+            string originalContent = File.Exists(absPath) ? File.ReadAllText(absPath) : string.Empty;
+
+            var filterEval = EcosystemFilters.EvaluatePrecedence(relPath, minDepth, isRoot, config, originalContent);
+
+            var parentPaths = graph.GetInEdges($"file:{relPath}")
+                .Select(e => graph.GetNode(e.SourceNodeId)?.RelativePath)
+                .Where(p => !string.IsNullOrEmpty(p) && !p.Equals(relPath, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(p => p!)
+                .ToList();
+
+            bool isCompanion = nodesInFile.Any(n => n.AnalysisLevel == CapabilityLevel.CompanionFile) ||
+                               relPath.EndsWith(".html") || relPath.EndsWith(".scss") || relPath.EndsWith(".css");
+
+            var evaluatedFile = new EvaluatedFile
+            {
+                RelativePath = relPath,
+                AbsolutePath = absPath,
+                Nodes = nodesInFile.ToList(),
+                IsRoot = isRoot,
+                Depth = minDepth,
+                Importance = maxImportance,
+                OriginalContent = originalContent,
+                ProcessedContent = originalContent,
+                IsCompanion = isCompanion,
+                ParentFilePaths = parentPaths
+            };
+
+            if (filterEval.Allowed)
+            {
+                var secrets = SecurityScanner.ScanForSecrets(relPath, originalContent);
+                allSecretFindings.AddRange(secrets);
+                candidateFiles.Add(evaluatedFile);
+            }
+            else
+            {
+                evaluatedFile.Included = false;
+                evaluatedFile.ExclusionReason = filterEval.ExclusionReason;
+                excludedFiles.Add(evaluatedFile);
+            }
+        }
+
+        progressCallback?.Invoke(85, "Applying comment stripping & token budget");
+
+        var budgetResult = TokenBudgetSelector.SelectFiles(candidateFiles, graph, config, _tokenEstimator);
+        var totalExcluded = excludedFiles.Concat(budgetResult.ExcludedFiles).ToList();
+
+        progressCallback?.Invoke(95, "Generating authoritative Git Changes Markdown context");
+
+        string rootSummaryLabel = modifiedRelPaths.Count == 1
+            ? modifiedRelPaths.First()
+            : $"{modifiedRelPaths.Count} Git-modified files";
+        string langLabel = detectedLanguages.Count > 0 ? string.Join(", ", detectedLanguages) : "Auto";
+
+        var metadata = new MarkdownGenerationMetadata
+        {
+            RootPath = rootSummaryLabel,
+            WorkspaceName = Path.GetFileName(wsRoot.TrimEnd('/', '\\')) ?? "Workspace",
+            Language = langLabel,
+            Framework = config.Framework != FrameworkName.Auto ? config.Framework.ToString() : "None",
+            AnalysisLevel = CapabilityLevel.Semantic,
+            FilesDiscovered = allDiscoveredFiles.Count,
+            Warnings = allWarnings.Distinct().ToList(),
+            DependencyTreeText = graph.RenderDependencyTree(rootNodeIds, modifiedRelPaths),
+            GitScopeDescription = gitResult.ScopeDescription,
+            GitDiffText = gitResult.UnifiedDiff,
+            ModifiedFiles = modifiedRelPaths
+        };
+
+        string markdown = MarkdownGenerator.Generate(metadata, budgetResult, totalExcluded, config);
+
+        string? finalOutputPath = null;
+        if (config.SaveToFile)
+        {
+            string defaultGitFilename = config.GitScope switch
+            {
+                GitScopeMode.StagedOnly => "git-staged-context.md",
+                GitScopeMode.UnstagedOnly => "git-unstaged-context.md",
+                _ => "git-changes-context.md"
+            };
+            string outFilename = !string.IsNullOrEmpty(config.OutputPath)
+                ? config.OutputPath
+                : defaultGitFilename;
+
+            finalOutputPath = Path.IsPathRooted(outFilename) ? outFilename : Path.Combine(wsRoot, outFilename);
+            string? outDir = Path.GetDirectoryName(finalOutputPath);
+            if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir))
+            {
+                Directory.CreateDirectory(outDir);
+            }
+            File.WriteAllText(finalOutputPath, markdown);
+        }
+
+        progressCallback?.Invoke(100, "Git changes context generated successfully");
+
+        return new OrchestrationResult
+        {
+            Success = true,
+            OutputPath = finalOutputPath,
+            RootPath = rootSummaryLabel,
+            Language = langLabel,
+            AnalysisLevel = CapabilityLevel.Semantic,
+            FilesDiscovered = allDiscoveredFiles.Count,
+            FilesIncluded = budgetResult.IncludedFiles.Count,
+            FilesExcluded = totalExcluded.Count,
+            FullEstimatedTokens = budgetResult.FullEstimatedTokens,
+            FinalEstimatedTokens = budgetResult.FinalEstimatedTokens,
+            ConfiguredTokenBudget = config.MaxTokens,
+            CommentsRequested = config.CommentMode.ToString(),
+            CommentsApplied = budgetResult.CommentsApplied,
+            BudgetMet = budgetResult.BudgetMet,
+            Warnings = metadata.Warnings,
             Diagnostics = allDiagnostics,
             SecretFindings = allSecretFindings,
             GeneratedMarkdown = markdown

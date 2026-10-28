@@ -18,39 +18,16 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand(`aiContextBuilder.${name}`, handler));
   };
 
-  // 1. Generate from Current File
+  // 1. Generate from Current File (or Interactive Scope Popup)
   registerCmd('generateFromFile', async (uri?: vscode.Uri) => {
     const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
-    if (!filePath) {
-      vscode.window.showErrorMessage('No active file selected to generate AI context.');
-      return;
-    }
+    await showScopeAndExportPopups(filePath, false);
+  });
 
-    const modePick = await vscode.window.showQuickPick(
-      [
-        {
-          label: '$(zap) Export with Defaults',
-          description: 'Instant Generation (Recommended)',
-          detail: 'Full dependency graph, automatic token budget, comments preserved, tools/lockfiles excluded'
-        },
-        {
-          label: '$(gear) Custom Options...',
-          description: 'Step-by-Step Configuration',
-          detail: 'Configure token budget, comment stripping, traversal depth, output destination & custom prompt'
-        }
-      ],
-      {
-        title: `AI Prompt & Context: ${path.basename(filePath)}`,
-        placeHolder: 'Choose export mode: Instant Defaults or Step-by-Step Custom Options'
-      }
-    );
-    if (!modePick) return;
-
-    if (modePick.label.includes('Defaults')) {
-      await runGeneration(filePath, {});
-    } else {
-      await promptAndRunCustomOptions(filePath);
-    }
+  // 1b. Generate from Git Changes (Direct Git Popup)
+  registerCmd('generateFromGit', async (uri?: vscode.Uri) => {
+    const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
+    await showScopeAndExportPopups(filePath, true);
   });
 
   // 2. Generate from Symbol at Cursor
@@ -292,7 +269,141 @@ function resolveCommand(extraArgs: string[]): CommandSpec {
   };
 }
 
-async function promptAndRunCustomOptions(filePath: string) {
+async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: boolean) {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!filePath && !workspaceFolder) {
+    vscode.window.showErrorMessage('Please open a file or workspace folder to generate AI context.');
+    return;
+  }
+
+  interface ScopeQuickPickItem extends vscode.QuickPickItem {
+    gitScope: 'none' | 'all' | 'staged' | 'unstaged' | 'file';
+  }
+
+  const fileItem: ScopeQuickPickItem | undefined = filePath
+    ? {
+        label: '$(file-code) Dependencies Only (No Git Changes)',
+        description: `Classic Mode (${path.basename(filePath)})`,
+        detail: 'Trace full dependency tree of the selected file without Git diffs',
+        gitScope: 'none',
+      }
+    : undefined;
+
+  const singleFileGitItem: ScopeQuickPickItem | undefined = filePath
+    ? {
+        label: '$(diff) Single File Git Changes + Dependencies Tree',
+        description: `Current File (${path.basename(filePath)})`,
+        detail: 'Trace dependency tree of the selected file and include its Git diff',
+        gitScope: 'file',
+      }
+    : undefined;
+
+  const gitItems: ScopeQuickPickItem[] = [
+    {
+      label: '$(git-merge) All Git Changes (Staged + Unstaged) + Dependencies Tree',
+      description: 'Workspace Git Scope',
+      detail: 'Discover all modified, added & untracked source files and trace their combined dependency trees',
+      gitScope: 'all',
+    },
+    {
+      label: '$(diff-added) Staged Git Changes ONLY + Dependencies Tree',
+      description: 'git diff --cached',
+      detail: 'Discover only staged (git add) files and trace their combined dependency trees',
+      gitScope: 'staged',
+    },
+    {
+      label: '$(diff-modified) Unstaged Git Changes ONLY + Dependencies Tree',
+      description: 'git diff',
+      detail: 'Discover only unstaged working tree modifications and trace their combined dependency trees',
+      gitScope: 'unstaged',
+    },
+  ];
+
+  const scopeItems: ScopeQuickPickItem[] = [];
+  if (gitFirst) {
+    scopeItems.push(...gitItems);
+    if (singleFileGitItem) scopeItems.push(singleFileGitItem);
+    if (fileItem) scopeItems.push(fileItem);
+  } else {
+    if (fileItem) scopeItems.push(fileItem);
+    scopeItems.push(...gitItems);
+    if (singleFileGitItem) scopeItems.push(singleFileGitItem);
+  }
+
+  // Popup 1: Select Scope
+  const scopePick = await vscode.window.showQuickPick(scopeItems, {
+    title: filePath
+      ? `AI Prompt & Context: ${path.basename(filePath)}`
+      : 'AI Prompt & Context: Git Workspace Changes',
+    placeHolder: 'Step 1: Select Context Scope (Dependencies Only vs Git Changes + Dependencies Tree)',
+  });
+  if (!scopePick) return;
+
+  let includeGitDiff = true;
+
+  // Popup 2: Select Output Content (only when a Git scope is chosen)
+  if (scopePick.gitScope !== 'none') {
+    const diffPick = await vscode.window.showQuickPick(
+      [
+        {
+          label: '$(diff) Git Diff + Full Dependencies Tree',
+          description: 'Recommended',
+          detail: 'Includes unified (+ / -) Git diff patch at top AND full source code of modified files + dependencies',
+          includeDiff: true,
+        },
+        {
+          label: '$(list-tree) Dependencies Tree Only (No Diff Text)',
+          description: 'Compact',
+          detail: 'Includes full source code of Git-modified files and their dependency trees, skipping raw diff text',
+          includeDiff: false,
+        },
+      ],
+      {
+        title: `Git Context Content (${scopePick.description})`,
+        placeHolder: 'Step 2: Choose whether to include the unified (+ / -) Git diff block in the Markdown',
+      }
+    );
+    if (!diffPick) return;
+    includeGitDiff = diffPick.includeDiff;
+  }
+
+  // Popup 3: Export with Defaults vs Custom Options
+  const modePick = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(zap) Export with Defaults',
+        description: 'Instant Generation (Recommended)',
+        detail: 'Full dependency graph, automatic token budget, comments preserved, tools/lockfiles excluded',
+      },
+      {
+        label: '$(gear) Custom Options...',
+        description: 'Step-by-Step Configuration',
+        detail: 'Configure token budget, comment stripping, traversal depth, output destination & custom prompt',
+      },
+    ],
+    {
+      title: 'Choose Export Mode',
+      placeHolder: 'Instant Defaults or Step-by-Step Custom Options',
+    }
+  );
+  if (!modePick) return;
+
+  const baseOptions: RunOptions = {
+    gitScope: scopePick.gitScope,
+    includeGitDiff,
+    workspacePath: workspaceFolder,
+  };
+
+  const targetPath = filePath || workspaceFolder || '';
+
+  if (modePick.label.includes('Defaults')) {
+    await runGeneration(targetPath, baseOptions);
+  } else {
+    await promptAndRunCustomOptions(targetPath, baseOptions);
+  }
+}
+
+async function promptAndRunCustomOptions(filePath: string, baseOptions: RunOptions = {}) {
   // Step 1: Token Budget
   const budgetPick = await vscode.window.showQuickPick(
     [
@@ -379,6 +490,7 @@ async function promptAndRunCustomOptions(filePath: string) {
   });
 
   await runGeneration(filePath, {
+    ...baseOptions,
     maxTokens,
     commentMode: commentPick.label,
     maxDepth,
@@ -396,6 +508,9 @@ interface RunOptions {
   copyToClipboard?: boolean;
   saveToFile?: boolean;
   task?: string;
+  gitScope?: 'none' | 'all' | 'staged' | 'unstaged' | 'file';
+  includeGitDiff?: boolean;
+  workspacePath?: string;
 }
 
 async function runGeneration(filePath: string, options: RunOptions) {
@@ -417,7 +532,25 @@ async function runGeneration(filePath: string, options: RunOptions) {
         }
       }, 600);
 
-      const args = ['generate', '--file', filePath, '--format', 'json'];
+      const args = ['generate', '--format', 'json'];
+      if (options.gitScope === 'all') {
+        args.push('--git');
+        if (options.workspacePath) args.push('--workspace', options.workspacePath);
+      } else if (options.gitScope === 'staged') {
+        args.push('--git-staged');
+        if (options.workspacePath) args.push('--workspace', options.workspacePath);
+      } else if (options.gitScope === 'unstaged') {
+        args.push('--git-unstaged');
+        if (options.workspacePath) args.push('--workspace', options.workspacePath);
+      } else if (options.gitScope === 'file') {
+        args.push('--file', filePath, '--git-file');
+      } else {
+        args.push('--file', filePath);
+      }
+
+      if (options.gitScope && options.gitScope !== 'none' && options.includeGitDiff === false) {
+        args.push('--no-diff');
+      }
       if (options.symbol) args.push('--symbol', options.symbol);
       if (options.maxTokens) args.push('--max-tokens', options.maxTokens.toString());
       if (options.maxDepth) args.push('--max-depth', options.maxDepth.toString());

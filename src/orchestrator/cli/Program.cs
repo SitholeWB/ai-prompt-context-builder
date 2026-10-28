@@ -29,7 +29,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.0.9");
+            Console.WriteLine("aipromptcontext (aicontext) version 1.1.0");
             return 0;
         }
 
@@ -205,10 +205,29 @@ public class Program
                 case "--omit-timestamp":
                     config.OmitTimestamp = true;
                     break;
+                case "--git" or "--git-all":
+                    config.GitScope = GitScopeMode.AllChanges;
+                    break;
+                case "--git-staged" or "--staged":
+                    config.GitScope = GitScopeMode.StagedOnly;
+                    break;
+                case "--git-unstaged":
+                    config.GitScope = GitScopeMode.UnstagedOnly;
+                    break;
+                case "--git-file":
+                    config.GitScope = GitScopeMode.SingleFile;
+                    break;
+                case "--include-git-diff":
+                    config.IncludeGitDiff = ParseBool(NextVal());
+                    break;
+                case "--no-diff":
+                    config.IncludeGitDiff = false;
+                    break;
             }
         }
 
-        if (string.IsNullOrWhiteSpace(config.RootPath))
+        bool isWorkspaceGitMode = config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly;
+        if (string.IsNullOrWhiteSpace(config.RootPath) && !isWorkspaceGitMode)
         {
             if (format == "json")
             {
@@ -216,13 +235,13 @@ public class Program
                 {
                     success = false,
                     errorCode = "InvalidConfiguration",
-                    message = "--file option is required."
+                    message = "--file option (or --git / --git-staged / --git-unstaged) is required."
                 };
                 Console.WriteLine(JsonSerializer.Serialize(errObj, JsonOpts));
             }
             else
             {
-                Console.Error.WriteLine("Error: --file <path> is required.");
+                Console.Error.WriteLine("Error: --file <path> (or --git / --git-staged / --git-unstaged) is required.");
             }
             return 1;
         }
@@ -234,7 +253,8 @@ public class Program
 
         if (format == "text")
         {
-            Console.Error.WriteLine($"[aipromptcontext] Analyzing source: {config.RootPath}...");
+            string targetDesc = isWorkspaceGitMode ? $"Git changes ({config.GitScope})" : config.RootPath;
+            Console.Error.WriteLine($"[aipromptcontext] Analyzing source: {targetDesc}...");
         }
 
         var orchestrator = new ContextOrchestrator();
@@ -324,16 +344,26 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.0.9
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.1.0
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
   aipromptcontext generate --file <path> [options]
+  aipromptcontext generate --git [--workspace <path>] [options]
+  aipromptcontext generate --git-staged [--workspace <path>] [options]
   aipromptcontext check-workers
   (or aicontext / aiprompt)
 
-Required:
+Target Scope (one required):
   --file <path>                  Target source file to analyze
+  --git, --git-all               Analyze all Git-modified/added/untracked files + their dependency trees
+  --git-staged, --staged         Analyze staged Git changes ONLY + their dependency trees
+  --git-unstaged                 Analyze unstaged working tree Git changes ONLY + their dependency trees
+  --git-file                     Include Git unified diff for the single --file target
+
+Git Options:
+  --include-git-diff <bool>      Include unified Git diff block in Markdown (default: true)
+  --no-diff                      Omit unified Git diff block (include only modified files + dependency tree)
 
 Options:
   --workspace <path>             Workspace root directory boundary

@@ -155,15 +155,22 @@ public class DependencyGraph
 
     public List<BfsTraversalItem> TraverseBfs(string rootId, int? maxDepth = null)
     {
-        var result = new List<BfsTraversalItem>();
-        if (!_nodes.TryGetValue(rootId, out var rootNode))
-            return result;
+        return TraverseBfs(new[] { rootId }, maxDepth);
+    }
 
+    public List<BfsTraversalItem> TraverseBfs(IEnumerable<string> rootIds, int? maxDepth = null)
+    {
+        var result = new List<BfsTraversalItem>();
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var queue = new Queue<(string nodeId, int depth, GraphEdge? parentEdge)>();
 
-        queue.Enqueue((rootId, 0, null));
-        visited.Add(rootId);
+        foreach (var rootId in rootIds)
+        {
+            if (_nodes.ContainsKey(rootId) && visited.Add(rootId))
+            {
+                queue.Enqueue((rootId, 0, null));
+            }
+        }
 
         while (queue.Count > 0)
         {
@@ -200,16 +207,18 @@ public class DependencyGraph
 
     public string RenderDependencyTree(string rootNodeId)
     {
-        if (!_nodes.TryGetValue(rootNodeId, out var rootNode))
+        return RenderDependencyTree(new[] { rootNodeId }, null);
+    }
+
+    public string RenderDependencyTree(IEnumerable<string> rootNodeIds, IReadOnlySet<string>? modifiedRelPaths = null)
+    {
+        var validRootIds = rootNodeIds.Where(id => _nodes.ContainsKey(id)).Distinct(StringComparer.Ordinal).ToList();
+        if (validRootIds.Count == 0)
             return "(Empty dependency tree)";
 
         var sb = new StringBuilder();
-        sb.AppendLine(string.IsNullOrEmpty(rootNode.RelativePath) ? rootNode.DisplayName : rootNode.RelativePath);
-
         var visitedInPath = new HashSet<string>(StringComparer.Ordinal);
         var globalVisited = new HashSet<string>(StringComparer.Ordinal);
-        visitedInPath.Add(rootNodeId);
-        globalVisited.Add(rootNodeId);
 
         void RenderChildren(string nodeId, string prefix)
         {
@@ -233,7 +242,10 @@ public class DependencyGraph
                 string targetLabel = targetNode != null ? targetNode.RelativePath : edge.TargetNodeId;
                 string relLabel = edge.Relationship.ToString().ToLowerInvariant();
                 string confLabel = edge.Confidence.ToString().ToLowerInvariant();
-                string annotation = $"[{relLabel}, {confLabel}]";
+                string modTag = (modifiedRelPaths != null && targetNode != null && modifiedRelPaths.Contains(targetNode.RelativePath))
+                    ? " [MODIFIED]"
+                    : "";
+                string annotation = $"[{relLabel}, {confLabel}]{modTag}";
 
                 if (visitedInPath.Contains(edge.TargetNodeId))
                 {
@@ -254,7 +266,28 @@ public class DependencyGraph
             }
         }
 
-        RenderChildren(rootNodeId, "");
+        for (int r = 0; r < validRootIds.Count; r++)
+        {
+            var rootNodeId = validRootIds[r];
+            var rootNode = _nodes[rootNodeId];
+            string rootLabel = string.IsNullOrEmpty(rootNode.RelativePath) ? rootNode.DisplayName : rootNode.RelativePath;
+            if (modifiedRelPaths != null && modifiedRelPaths.Contains(rootNode.RelativePath))
+            {
+                rootLabel += " [MODIFIED]";
+            }
+
+            sb.AppendLine(rootLabel);
+            visitedInPath.Clear();
+            visitedInPath.Add(rootNodeId);
+            globalVisited.Add(rootNodeId);
+            RenderChildren(rootNodeId, "");
+
+            if (r < validRootIds.Count - 1)
+            {
+                sb.AppendLine();
+            }
+        }
+
         return sb.ToString().TrimEnd();
     }
 }

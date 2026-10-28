@@ -157,6 +157,15 @@ public enum RequestedAnalysisLevel
     ImportGraph
 }
 
+public enum GitScopeMode
+{
+    None,
+    AllChanges,
+    StagedOnly,
+    UnstagedOnly,
+    SingleFile
+}
+
 public enum ExclusionReason
 {
     TokenBudget,
@@ -204,6 +213,7 @@ public enum ErrorCode
     UntrustedWorkspace,
     TokenBudgetTooSmall,
     CommentRemovalUnsupported,
+    NoGitChanges,
     UnexpectedError
 }
 
@@ -281,6 +291,8 @@ public class UserConfiguration
     public LanguageName Language { get; set; } = LanguageName.Auto;
     public FrameworkName Framework { get; set; } = FrameworkName.Auto;
     public RequestedAnalysisLevel AnalysisLevel { get; set; } = RequestedAnalysisLevel.Best;
+    public GitScopeMode GitScope { get; set; } = GitScopeMode.None;
+    public bool IncludeGitDiff { get; set; } = true;
 
     public int? MaxTokens { get; set; }
     public int? MaxDepth { get; set; }

@@ -19,6 +19,9 @@ public class MarkdownGenerationMetadata
     public int FilesDiscovered { get; set; }
     public List<string> Warnings { get; set; } = new();
     public string DependencyTreeText { get; set; } = string.Empty;
+    public string? GitScopeDescription { get; set; }
+    public string? GitDiffText { get; set; }
+    public HashSet<string> ModifiedFiles { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public static class MarkdownGenerator
@@ -41,6 +44,12 @@ public static class MarkdownGenerator
             ".java" => "java",
             ".py" => "python",
             ".go" => "go",
+            ".rs" => "rust",
+            ".kt" or ".kts" => "kotlin",
+            ".php" => "php",
+            ".dart" => "dart",
+            ".c" or ".h" => "c",
+            ".cpp" or ".cc" or ".cxx" or ".hpp" or ".hh" => "cpp",
             ".razor" or ".cshtml" => "razor",
             ".vue" => "vue",
             ".json" => "json",
@@ -107,6 +116,10 @@ public static class MarkdownGenerator
             sb.AppendLine();
             sb.AppendLine($"- Root: `{meta.RootPath}`" + (!string.IsNullOrEmpty(meta.RootSymbol) ? $" (Symbol: `{meta.RootSymbol}`)" : ""));
             sb.AppendLine($"- Workspace: `{meta.WorkspaceName}`");
+            if (!string.IsNullOrEmpty(meta.GitScopeDescription))
+            {
+                sb.AppendLine($"- Git Scope: {meta.GitScopeDescription} ({meta.ModifiedFiles.Count} modified files)");
+            }
             if (!string.IsNullOrEmpty(meta.Language) && meta.Language != "Auto")
             {
                 sb.AppendLine($"- Language: {meta.Language}");
@@ -149,12 +162,25 @@ public static class MarkdownGenerator
             sb.AppendLine();
         }
 
+        // 30.6b Git Unified Diff (when GitScope is active and IncludeGitDiff is true)
+        if (config.GitScope != GitScopeMode.None && config.IncludeGitDiff && !string.IsNullOrWhiteSpace(meta.GitDiffText))
+        {
+            sb.AppendLine("## Git Changes (Unified Diff)");
+            sb.AppendLine();
+            var (openDiffFence, closeDiffFence) = CreateSafeFence(meta.GitDiffText.Trim(), "diff");
+            sb.AppendLine(openDiffFence);
+            sb.AppendLine(meta.GitDiffText.Trim());
+            sb.AppendLine(closeDiffFence);
+            sb.AppendLine();
+        }
+
         // 30.7 Included Files
         sb.AppendLine("## Included Files");
         sb.AppendLine();
         foreach (var f in budgetResult.IncludedFiles)
         {
-            sb.AppendLine($"- `{f.RelativePath}`");
+            bool isMod = config.GitScope != GitScopeMode.None && meta.ModifiedFiles.Contains(f.RelativePath);
+            sb.AppendLine(isMod ? $"- `{f.RelativePath}` *(Modified)*" : $"- `{f.RelativePath}`");
         }
         sb.AppendLine();
 
@@ -183,8 +209,9 @@ public static class MarkdownGenerator
         {
             string lang = GetFenceLanguage(f.RelativePath);
             var (openFence, closeFence) = CreateSafeFence(f.ProcessedContent, lang);
+            bool isMod = config.GitScope != GitScopeMode.None && meta.ModifiedFiles.Contains(f.RelativePath);
 
-            sb.AppendLine($"### File: `{f.RelativePath}`");
+            sb.AppendLine(isMod ? $"### File: `{f.RelativePath}` (Modified)" : $"### File: `{f.RelativePath}`");
             sb.AppendLine();
             sb.AppendLine(openFence);
             sb.AppendLine(f.ProcessedContent);

@@ -44,21 +44,39 @@ public static class ImportanceScorer
         string rootNodeId,
         ScoringWeights? weights = null)
     {
+        return CalculateScores(graph, new[] { rootNodeId }, weights);
+    }
+
+    public static Dictionary<string, int> CalculateScores(
+        DependencyGraph graph,
+        IEnumerable<string> rootNodeIds,
+        ScoringWeights? weights = null)
+    {
         weights ??= new ScoringWeights();
         var scores = new Dictionary<string, int>(StringComparer.Ordinal);
-        var rootNode = graph.GetNode(rootNodeId);
-        if (rootNode == null) return scores;
+        var rootSet = new HashSet<string>(StringComparer.Ordinal);
 
-        scores[rootNodeId] = weights.RootFile;
-        rootNode.Importance = weights.RootFile;
+        foreach (var rootId in rootNodeIds)
+        {
+            var rNode = graph.GetNode(rootId);
+            if (rNode != null)
+            {
+                rootSet.Add(rootId);
+                scores[rootId] = weights.RootFile;
+                rNode.Importance = weights.RootFile;
+                rNode.Depth = 0;
+            }
+        }
 
-        var bfsResults = graph.TraverseBfs(rootNodeId);
+        if (rootSet.Count == 0) return scores;
+
+        var bfsResults = graph.TraverseBfs(rootSet);
         var depthMap = bfsResults.ToDictionary(r => r.Node.Id, r => r.Depth, StringComparer.Ordinal);
 
         foreach (var item in bfsResults)
         {
             var node = item.Node;
-            if (node.Id == rootNodeId) continue;
+            if (rootSet.Contains(node.Id)) continue;
 
             var inEdges = graph.GetInEdges(node.Id);
             double baseScore = 0;
@@ -75,7 +93,7 @@ public static class ImportanceScorer
             int depth = depthMap.GetValueOrDefault(node.Id, 99);
             double depthMultiplier = Math.Max(0.2, 1.0 - (depth - 1) * 0.15);
 
-            bool isDirect = inEdges.Any(e => e.SourceNodeId == rootNodeId);
+            bool isDirect = inEdges.Any(e => rootSet.Contains(e.SourceNodeId));
             int directBonus = isDirect ? 25 : 0;
 
             int refCountBonus = Math.Min(30, Math.Max(0, inEdges.Count - 1) * 10);

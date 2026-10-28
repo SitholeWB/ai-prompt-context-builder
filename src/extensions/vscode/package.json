@@ -3,7 +3,7 @@
   "displayName": "AI Context Builder & Prompt Generator",
   "icon": "media/icon.png",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -55,6 +55,7 @@
   ],
   "activationEvents": [
     "onCommand:aiPromptContextBuilder.generateFromFile",
+    "onCommand:aiPromptContextBuilder.generateFromGit",
     "onCommand:aiPromptContextBuilder.generateFromSymbol",
     "onCommand:aiPromptContextBuilder.generateWithOptions",
     "onCommand:aiPromptContextBuilder.generateAndCopy",
@@ -65,6 +66,7 @@
     "onCommand:aiPromptContextBuilder.checkWorkers",
     "onCommand:aiPromptContextBuilder.acquireRuntime",
     "onCommand:aiContextBuilder.generateFromFile",
+    "onCommand:aiContextBuilder.generateFromGit",
     "onCommand:aiContextBuilder.generateFromSymbol",
     "onCommand:aiContextBuilder.generateWithOptions"
   ],
@@ -73,7 +75,12 @@
     "commands": [
       {
         "command": "aiPromptContextBuilder.generateFromFile",
-        "title": "AI Prompt: Generate from Current File",
+        "title": "AI Prompt: Generate from Current File / Git Scope...",
+        "category": "AI Context / Prompt"
+      },
+      {
+        "command": "aiPromptContextBuilder.generateFromGit",
+        "title": "AI Prompt: Generate from Git Changes + Dependencies Tree...",
         "category": "AI Context / Prompt"
       },
       {
@@ -127,19 +134,36 @@
         {
           "command": "aiPromptContextBuilder.generateFromFile",
           "group": "aiContext@1",
-          "title": "Generate AI Prompt & Context"
+          "title": "Generate AI Prompt & Context..."
+        },
+        {
+          "command": "aiPromptContextBuilder.generateFromGit",
+          "group": "aiContext@2",
+          "title": "Generate AI Prompt from Git Changes..."
         },
         {
           "command": "aiPromptContextBuilder.generateWithOptions",
-          "group": "aiContext@2",
-          "title": "Generate AI Prompt & Context with Options..."
+          "group": "aiContext@3",
+          "title": "Generate AI Prompt & Context with Custom Options..."
         }
       ],
       "explorer/context": [
         {
           "command": "aiPromptContextBuilder.generateFromFile",
           "group": "aiContext@1",
-          "title": "Generate AI Prompt & Context"
+          "title": "Generate AI Prompt & Context..."
+        },
+        {
+          "command": "aiPromptContextBuilder.generateFromGit",
+          "group": "aiContext@2",
+          "title": "Generate AI Prompt from Git Changes..."
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "aiPromptContextBuilder.generateFromGit",
+          "group": "navigation",
+          "title": "Generate AI Prompt from Git Changes + Dependencies Tree"
         }
       ]
     },

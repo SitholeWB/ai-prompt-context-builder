@@ -35,10 +35,19 @@ Generate clean, dependency-aware AI prompts directly inside your editor with sin
 
 ### How to Use
 
-#### 1. Right-Click in the File Explorer (Fastest)
-* Right-click any source file in the Explorer tree (`.cs`, `.ts`, `.tsx`, `.razor`, `.py`, `.java`, `.go`, etc.).
-* Click **AI Prompt: Generate from Current File**.
-* The extension automatically traverses direct and transitive dependencies, links companion templates/styles, strips internal noise, and opens the clean prompt in a new editor tab ready to copy into your AI chat.
+#### 1. Right-Click in the File Explorer or Source Control Panel (Interactive Popup Flow)
+* Right-click any source file in the Explorer tree (`.cs`, `.ts`, `.tsx`, `.razor`, `.py`, `.rs`, `.kt`, `.php`, `.dart`, `.cpp`, `.java`, `.go`, etc.) and click **Generate AI Prompt & Context...** (or **Generate AI Prompt from Git Changes...**).
+* **Popup 1 — Select Context & Git Scope**:
+  * **Dependencies Only (No Git Changes)** — Classic mode: trace the full dependency tree of the selected file without Git diffs.
+  * **All Git Changes (Staged + Unstaged) + Dependencies Tree** — Discover all modified, added, and untracked source files in your workspace and trace their combined dependency trees.
+  * **Staged Git Changes ONLY + Dependencies Tree** — Discover only staged (`git add`) files and trace their dependency trees.
+  * **Unstaged Git Changes ONLY + Dependencies Tree** — Discover only unstaged working tree modifications and trace their dependency trees.
+  * **Single File Git Changes + Dependencies Tree** — Trace the dependency tree of the selected file and include its Git diff.
+* **Popup 2 — Select Output Content** *(when a Git scope is selected)*:
+  * **Git Diff + Full Dependencies Tree (Recommended)** — Embeds the unified (`+` / `-`) Git diff patch at the top of the Markdown file **plus** the complete source code of all modified files and their dependency trees.
+  * **Dependencies Tree Only (No Diff Text)** — Includes the complete source code of the Git-modified files and their dependency trees without the raw diff block.
+* **Popup 3 — Choose Export Mode**:
+  * **Export with Defaults** (instant one-click generation) or **Custom Options...** (configure token budget, comment stripping, depth, output destination & custom prompt task).
 
 #### 2. Right-Click Inside Code (Targeted Symbol)
 * Place your cursor on any class name, interface, method, or function.

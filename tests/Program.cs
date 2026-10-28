@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,6 +65,8 @@ public class Program
         await RunTestAsync("34. PHP Ecosystem: PSR-4 Namespaces, Attributes & Interface Resolution", TestPhpOrchestration);
         await RunTestAsync("35. Dart / Flutter: Parts, Companion Models & Widget Traversal", TestDartOrchestration);
         await RunTestAsync("36. C / C++: Companion Header/Source & Include Hierarchy", TestCppOrchestration);
+        await RunTestAsync("37. Git Changes + Dependencies Tree: AllChanges & StagedOnly Multi-Root Traversal", TestGitChangesMultiRootOrchestration);
+        await RunTestAsync("38. Git Changes Options: Dependencies Tree Only (No Diff Text) & Single File Git Diff", TestGitChangesNoDiffAndSingleFile);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -750,6 +753,137 @@ public class Program
         Assert(res.GeneratedMarkdown!.Contains("OrderService.cpp"), "OrderService.cpp included");
         Assert(res.GeneratedMarkdown.Contains("OrderService.h"), "OrderService.h discovered as companion header");
         Assert(res.GeneratedMarkdown.Contains("IOrderService.h"), "IOrderService.h discovered as included base class header");
+    }
+
+    private static async Task TestGitChangesMultiRootOrchestration()
+    {
+        string tempRepo = Path.Combine(Path.GetTempPath(), "ai-ctx-git-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRepo);
+        try
+        {
+            // Create 3 files: A.ts -> imports B.ts, and C.py -> imports D.py
+            File.WriteAllText(Path.Combine(tempRepo, "B.ts"), "export const helperValue = 42;\n");
+            File.WriteAllText(Path.Combine(tempRepo, "A.ts"), "import { helperValue } from './B';\nexport function compute() { return helperValue; }\n");
+            File.WriteAllText(Path.Combine(tempRepo, "D.py"), "def format_msg(x):\n    return str(x)\n");
+            File.WriteAllText(Path.Combine(tempRepo, "C.py"), "from D import format_msg\ndef run():\n    return format_msg(10)\n");
+
+            RunGitCmd(tempRepo, "init");
+            RunGitCmd(tempRepo, "config user.email \"test@example.com\"");
+            RunGitCmd(tempRepo, "config user.name \"Test User\"");
+            RunGitCmd(tempRepo, "add .");
+            RunGitCmd(tempRepo, "commit -m \"Initial commit\"");
+
+            // Modify A.ts (staged) and C.py (unstaged)
+            File.WriteAllText(Path.Combine(tempRepo, "A.ts"), "import { helperValue } from './B';\nexport function compute() { return helperValue * 2; }\n");
+            RunGitCmd(tempRepo, "add A.ts");
+            File.WriteAllText(Path.Combine(tempRepo, "C.py"), "from D import format_msg\ndef run():\n    return format_msg(999)\n");
+
+            var orchestrator = new ContextOrchestrator();
+
+            // 1. Test StagedOnly: should include A.ts (modified) + its dependency B.ts, and NOT C.py
+            var stagedRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+            {
+                WorkspacePath = tempRepo,
+                GitScope = GitScopeMode.StagedOnly,
+                IncludeGitDiff = true,
+                SaveToFile = false
+            });
+
+            Assert(stagedRes.Success, $"StagedOnly orchestration succeeded: {stagedRes.ErrorMessage}");
+            Assert(stagedRes.GeneratedMarkdown!.Contains("## Git Changes (Unified Diff)"), "StagedOnly includes Git Changes Unified Diff section");
+            Assert(stagedRes.GeneratedMarkdown.Contains("+export function compute() { return helperValue * 2; }"), "StagedOnly diff shows modified line in A.ts");
+            Assert(stagedRes.GeneratedMarkdown.Contains("`A.ts` *(Modified)*"), "A.ts marked as *(Modified)*");
+            Assert(stagedRes.GeneratedMarkdown.Contains("`B.ts`"), "Dependency B.ts automatically resolved and included");
+            Assert(!stagedRes.GeneratedMarkdown.Contains("`C.py`"), "Unstaged C.py excluded from StagedOnly scope");
+
+            // 2. Test AllChanges: should include A.ts + B.ts AND C.py + D.py
+            var allRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+            {
+                WorkspacePath = tempRepo,
+                GitScope = GitScopeMode.AllChanges,
+                IncludeGitDiff = true,
+                SaveToFile = false
+            });
+
+            Assert(allRes.Success, $"AllChanges orchestration succeeded: {allRes.ErrorMessage}");
+            Assert(allRes.GeneratedMarkdown!.Contains("`A.ts` *(Modified)*"), "AllChanges includes A.ts as modified");
+            Assert(allRes.GeneratedMarkdown.Contains("`B.ts`"), "AllChanges includes dependency B.ts");
+            Assert(allRes.GeneratedMarkdown.Contains("`C.py` *(Modified)*"), "AllChanges includes C.py as modified");
+            Assert(allRes.GeneratedMarkdown.Contains("`D.py`"), "AllChanges includes dependency D.py");
+            Assert(allRes.GeneratedMarkdown.Contains("+    return format_msg(999)"), "AllChanges diff includes unstaged C.py diff");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRepo, true); } catch { }
+        }
+    }
+
+    private static async Task TestGitChangesNoDiffAndSingleFile()
+    {
+        string tempRepo = Path.Combine(Path.GetTempPath(), "ai-ctx-git-nodiff-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRepo);
+        try
+        {
+            File.WriteAllText(Path.Combine(tempRepo, "Util.ts"), "export function greet(name: string) { return 'Hello ' + name; }\n");
+            File.WriteAllText(Path.Combine(tempRepo, "Main.ts"), "import { greet } from './Util';\nconsole.log(greet('World'));\n");
+
+            RunGitCmd(tempRepo, "init");
+            RunGitCmd(tempRepo, "config user.email \"test@example.com\"");
+            RunGitCmd(tempRepo, "config user.name \"Test User\"");
+            RunGitCmd(tempRepo, "add .");
+            RunGitCmd(tempRepo, "commit -m \"Initial commit\"");
+
+            File.WriteAllText(Path.Combine(tempRepo, "Main.ts"), "import { greet } from './Util';\nconsole.log(greet('AI Context'));\n");
+
+            var orchestrator = new ContextOrchestrator();
+
+            // 1. Test IncludeGitDiff = false (Dependencies Tree Only without diff block)
+            var noDiffRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+            {
+                WorkspacePath = tempRepo,
+                GitScope = GitScopeMode.AllChanges,
+                IncludeGitDiff = false,
+                SaveToFile = false
+            });
+
+            Assert(noDiffRes.Success, $"NoDiff orchestration succeeded: {noDiffRes.ErrorMessage}");
+            Assert(!noDiffRes.GeneratedMarkdown!.Contains("## Git Changes (Unified Diff)"), "Unified Diff block omitted when IncludeGitDiff is false");
+            Assert(noDiffRes.GeneratedMarkdown.Contains("`Main.ts` *(Modified)*"), "Main.ts still marked as modified");
+            Assert(noDiffRes.GeneratedMarkdown.Contains("`Util.ts`"), "Dependency Util.ts still resolved and included");
+
+            // 2. Test SingleFile GitScope
+            var singleFileRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+            {
+                RootPath = Path.Combine(tempRepo, "Main.ts"),
+                WorkspacePath = tempRepo,
+                GitScope = GitScopeMode.SingleFile,
+                IncludeGitDiff = true,
+                SaveToFile = false
+            });
+
+            Assert(singleFileRes.Success, $"SingleFile Git orchestration succeeded: {singleFileRes.ErrorMessage}");
+            Assert(singleFileRes.GeneratedMarkdown!.Contains("## Git Changes (Unified Diff)"), "SingleFile includes Git Changes Unified Diff");
+            Assert(singleFileRes.GeneratedMarkdown.Contains("+console.log(greet('AI Context'));"), "SingleFile diff contains Main.ts change");
+            Assert(singleFileRes.GeneratedMarkdown.Contains("`Util.ts`"), "SingleFile includes dependency Util.ts");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRepo, true); } catch { }
+        }
+    }
+
+    private static void RunGitCmd(string workDir, string args)
+    {
+        var psi = new ProcessStartInfo("git", args)
+        {
+            WorkingDirectory = workDir,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var proc = Process.Start(psi)!;
+        proc.WaitForExit();
     }
 
     private static void Assert(bool condition, string message)

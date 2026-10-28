@@ -46,8 +46,9 @@ public static class TokenBudgetSelector
         ITokenEstimator tokenEstimator,
         int markdownOverheadTokens = 500)
     {
-        var rootFile = candidateFiles.FirstOrDefault(f => f.IsRoot)
-            ?? throw new InvalidOperationException("No root file present in candidate list.");
+        var rootFiles = candidateFiles.Where(f => f.IsRoot).ToList();
+        if (rootFiles.Count == 0)
+            throw new InvalidOperationException("No root file present in candidate list.");
 
         // Estimate full preserved tokens
         int totalPreservedFileTokens = candidateFiles.Sum(f => tokenEstimator.EstimateTokens(f.OriginalContent).TokenCount);
@@ -112,11 +113,18 @@ public static class TokenBudgetSelector
             f.TokenCount = tokenEstimator.EstimateTokens(f.ProcessedContent).TokenCount;
         }
 
-        bool rootAloneExceedsBudget = rootFile.TokenCount > availableBudgetForFiles;
+        int totalRootTokens = rootFiles.Sum(r => r.TokenCount);
+        bool rootAloneExceedsBudget = totalRootTokens > availableBudgetForFiles;
 
-        // Root file is ALWAYS included
-        rootFile.Included = true;
-        int accumulatedTokens = rootFile.TokenCount;
+        // Root files are ALWAYS included
+        var includedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int accumulatedTokens = 0;
+        foreach (var r in rootFiles)
+        {
+            r.Included = true;
+            includedSet.Add(r.RelativePath);
+            accumulatedTokens += r.TokenCount;
+        }
 
         var nonRootFiles = candidateFiles.Where(f => !f.IsRoot).ToList();
         nonRootFiles.Sort((a, b) =>
@@ -129,8 +137,6 @@ public static class TokenBudgetSelector
                 return b.Importance.CompareTo(a.Importance);
             return string.Compare(a.RelativePath, b.RelativePath, StringComparison.OrdinalIgnoreCase);
         });
-
-        var includedSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { rootFile.RelativePath };
 
         foreach (var f in nonRootFiles)
         {
