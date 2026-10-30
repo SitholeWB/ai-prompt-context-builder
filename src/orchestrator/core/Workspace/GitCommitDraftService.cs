@@ -54,8 +54,9 @@ public static class GitCommitDraftService
         "dist", "build", "out", "target", "vendor", "coverage"
     };
 
-    public static CommitDraftResult DraftCommitMessage(string workspaceOrFilePath, GitScopeMode requestedScope = GitScopeMode.None)
+    public static CommitDraftResult DraftCommitMessage(string workspaceOrFilePath, GitScopeMode requestedScope = GitScopeMode.None, string outputLanguage = "en")
     {
+        string lang = Markdown.MarkdownGenerator.NormalizeLanguageCode(outputLanguage);
         var gitRoot = GitDiffService.FindGitRoot(workspaceOrFilePath);
         if (string.IsNullOrEmpty(gitRoot))
         {
@@ -169,8 +170,10 @@ public static class GitCommitDraftService
         string commitType = InferCommitType(summaries, fixSignalScore);
         string? scope = InferCommitScope(summaries);
 
+        var (addVerb, updateVerb, removeVerb, renameVerb, inPreposition, andConjunction) = GetCommitVerbs(lang);
+
         // Build Subject Line
-        string subjectAction = BuildSubjectAction(commitType, summaries);
+        string subjectAction = BuildSubjectAction(commitType, summaries, addVerb, updateVerb, removeVerb, inPreposition, andConjunction);
         string prefix = !string.IsNullOrEmpty(scope) ? $"{commitType}({scope}): " : $"{commitType}: ";
         string subject = prefix + subjectAction;
         if (subject.Length > 76)
@@ -185,24 +188,24 @@ public static class GitCommitDraftService
             string fileName = Path.GetFileName(s.RelativePath);
             string verb = s.ChangeKind switch
             {
-                "Added" => "Add",
-                "Deleted" => "Remove",
-                "Renamed" => "Rename",
-                _ => "Update"
+                "Added" => CapitalizeFirst(addVerb),
+                "Deleted" => CapitalizeFirst(removeVerb),
+                "Renamed" => CapitalizeFirst(renameVerb),
+                _ => CapitalizeFirst(updateVerb)
             };
 
             var details = new List<string>();
             if (s.AddedSymbols.Count > 0)
             {
-                details.Add($"add {string.Join(", ", s.AddedSymbols.Take(4))}");
+                details.Add($"{addVerb} {string.Join(", ", s.AddedSymbols.Take(4))}");
             }
             if (s.ModifiedSymbols.Count > 0)
             {
-                details.Add($"update {string.Join(", ", s.ModifiedSymbols.Take(4))}");
+                details.Add($"{updateVerb} {string.Join(", ", s.ModifiedSymbols.Take(4))}");
             }
             if (s.RemovedSymbols.Count > 0)
             {
-                details.Add($"remove {string.Join(", ", s.RemovedSymbols.Take(3))}");
+                details.Add($"{removeVerb} {string.Join(", ", s.RemovedSymbols.Take(3))}");
             }
 
             string statTag = (s.Insertions > 0 || s.Deletions > 0) ? $" (+{s.Insertions}/-{s.Deletions})" : "";
@@ -444,7 +447,34 @@ public static class GitCommitDraftService
         return null;
     }
 
-    private static string BuildSubjectAction(string commitType, List<FileChangeSummary> files)
+    private static string CapitalizeFirst(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+    private static (string Add, string Update, string Remove, string Rename, string InPrep, string AndConj) GetCommitVerbs(string lang)
+    {
+        return lang switch
+        {
+            "es" => ("añadir", "actualizar", "eliminar", "renombrar", "en", "y"),
+            "fr" => ("ajouter", "mettre à jour", "supprimer", "renommer", "dans", "et"),
+            "de" => ("hinzufügen", "aktualisieren", "entfernen", "umbenennen", "in", "und"),
+            "zh" => ("添加", "更新", "移除", "重命名", "于", "及"),
+            "ja" => ("追加", "更新", "削除", "名前変更", "内", "および"),
+            "pt" => ("adicionar", "atualizar", "remover", "renomear", "em", "e"),
+            "ru" => ("добавить", "обновить", "удалить", "переименовать", "в", "и"),
+            "zu" => ("engeza", "buyekeza", "susa", "qamba kabusha", "ku-", "futhi"),
+            "af" => ("voeg by", "dateer op", "verwyder", "hernoem", "in", "en"),
+            _ => ("add", "update", "remove", "rename", "in", "and")
+        };
+    }
+
+    private static string BuildSubjectAction(
+        string commitType,
+        List<FileChangeSummary> files,
+        string addVerb = "add",
+        string updateVerb = "update",
+        string removeVerb = "remove",
+        string inPrep = "in",
+        string andConj = "and")
     {
         var addedFiles = files.Where(f => f.ChangeKind == "Added").Select(f => Path.GetFileNameWithoutExtension(f.RelativePath)).Distinct().ToList();
         var modifiedFiles = files.Where(f => f.ChangeKind == "Modified").Select(f => Path.GetFileNameWithoutExtension(f.RelativePath)).Distinct().ToList();
@@ -460,54 +490,54 @@ public static class GitCommitDraftService
             if (f.ChangeKind == "Added")
             {
                 if (f.AddedSymbols.Count > 0)
-                    return $"add {name} ({string.Join(", ", f.AddedSymbols.Take(2))})";
-                return $"add {name}";
+                    return $"{addVerb} {name} ({string.Join(", ", f.AddedSymbols.Take(2))})";
+                return $"{addVerb} {name}";
             }
             if (f.ChangeKind == "Deleted")
             {
-                return $"remove {name}";
+                return $"{removeVerb} {name}";
             }
             if (f.AddedSymbols.Count > 0)
             {
-                return $"add {string.Join(", ", f.AddedSymbols.Take(2))} in {name}";
+                return $"{addVerb} {string.Join(", ", f.AddedSymbols.Take(2))} {inPrep} {name}";
             }
             if (f.ModifiedSymbols.Count > 0)
             {
-                return $"update {string.Join(", ", f.ModifiedSymbols.Take(2))} in {name}";
+                return $"{updateVerb} {string.Join(", ", f.ModifiedSymbols.Take(2))} {inPrep} {name}";
             }
-            return $"update {name}";
+            return $"{updateVerb} {name}";
         }
 
         var parts = new List<string>();
         if (addedFiles.Count > 0)
         {
-            parts.Add($"add {string.Join(", ", addedFiles.Take(2))}");
+            parts.Add($"{addVerb} {string.Join(", ", addedFiles.Take(2))}");
         }
         else if (allAddedSymbols.Count > 0)
         {
-            parts.Add($"add {string.Join(", ", allAddedSymbols.Take(2))}");
+            parts.Add($"{addVerb} {string.Join(", ", allAddedSymbols.Take(2))}");
         }
 
         if (modifiedFiles.Count > 0)
         {
-            parts.Add($"update {string.Join(", ", modifiedFiles.Take(2))}");
+            parts.Add($"{updateVerb} {string.Join(", ", modifiedFiles.Take(2))}");
         }
         else if (allModifiedSymbols.Count > 0 && parts.Count == 0)
         {
-            parts.Add($"update {string.Join(", ", allModifiedSymbols.Take(2))}");
+            parts.Add($"{updateVerb} {string.Join(", ", allModifiedSymbols.Take(2))}");
         }
 
         if (deletedFiles.Count > 0 && parts.Count < 2)
         {
-            parts.Add($"remove {string.Join(", ", deletedFiles.Take(2))}");
+            parts.Add($"{removeVerb} {string.Join(", ", deletedFiles.Take(2))}");
         }
 
         if (parts.Count > 0)
         {
-            return string.Join(" and ", parts.Take(2));
+            return string.Join($" {andConj} ", parts.Take(2));
         }
 
-        return $"update {files.Count} files";
+        return $"{updateVerb} {files.Count} files";
     }
 
     private static string GetFileDiff(string gitRoot, string relPath, GitScopeMode scope, bool hasHead, string changeKind)

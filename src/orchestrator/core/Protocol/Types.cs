@@ -320,6 +320,7 @@ public class UserConfiguration
     public bool OpenAfterGeneration { get; set; } = false;
 
     public string? Task { get; set; }
+    public string OutputLanguage { get; set; } = "en";
 
     public List<string> IncludeGlobs { get; set; } = new();
     public List<string> ExcludeGlobs { get; set; } = new();

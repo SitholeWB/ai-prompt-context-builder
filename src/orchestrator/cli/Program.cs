@@ -232,6 +232,9 @@ public class Program
                 case "--draft-commit":
                     isDraftCommit = true;
                     break;
+                case "--output-language" or "--locale":
+                    config.OutputLanguage = NextVal();
+                    break;
             }
         }
 
@@ -241,7 +244,7 @@ public class Program
                 ? config.WorkspacePath
                 : (!string.IsNullOrWhiteSpace(config.RootPath) ? config.RootPath : Directory.GetCurrentDirectory());
 
-            var draftRes = GitCommitDraftService.DraftCommitMessage(startPath, config.GitScope);
+            var draftRes = GitCommitDraftService.DraftCommitMessage(startPath, config.GitScope, config.OutputLanguage);
             if (!draftRes.Success)
             {
                 if (format == "json")

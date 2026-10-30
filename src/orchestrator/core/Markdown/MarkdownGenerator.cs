@@ -85,6 +85,10 @@ public static class MarkdownGenerator
         sb.AppendLine();
 
         // 30.2 Task
+        string langCode = NormalizeLanguageCode(config.OutputLanguage);
+        string? langDisplayName = GetNaturalLanguageDisplayName(langCode);
+        string? langNativePrompt = GetLocalizedTaskInstruction(langCode);
+
         sb.AppendLine("## Task");
         sb.AppendLine();
         if (!string.IsNullOrWhiteSpace(config.Task))
@@ -94,6 +98,11 @@ public static class MarkdownGenerator
         else
         {
             sb.AppendLine("Analyse the selected source and its included dependencies. Before proposing changes, identify missing context and unresolved dependencies.");
+        }
+        if (langDisplayName != null && langNativePrompt != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"> **Response Language ({langDisplayName})**: {langNativePrompt}");
         }
         sb.AppendLine();
 
@@ -107,6 +116,10 @@ public static class MarkdownGenerator
         sb.AppendLine("- When proposing a refactor, provide complete replacement files and preserve their original paths.");
         sb.AppendLine("- Do not shorten implementations with placeholders, omitted regions, or ellipses.");
         sb.AppendLine("- Account for the dependency relationships and analysis limitations documented below.");
+        if (langDisplayName != null)
+        {
+            sb.AppendLine($"- Write all explanations, architectural reviews, bug diagnoses, and refactoring notes in **{langDisplayName}** (while keeping code identifiers, syntax, and file paths in their original programming language).");
+        }
         sb.AppendLine();
 
         // 30.4 Scope & Context (Clean AI Prompt Mode)
@@ -119,6 +132,10 @@ public static class MarkdownGenerator
             if (!string.IsNullOrEmpty(meta.GitScopeDescription))
             {
                 sb.AppendLine($"- Git Scope: {meta.GitScopeDescription} ({meta.ModifiedFiles.Count} modified files)");
+            }
+            if (langDisplayName != null)
+            {
+                sb.AppendLine($"- Response Language: {langDisplayName}");
             }
             if (!string.IsNullOrEmpty(meta.Language) && meta.Language != "Auto")
             {
@@ -230,5 +247,59 @@ public static class MarkdownGenerator
                             .Replace('.', '-')
                             .ToLowerInvariant();
         return $"{kebab}-context.md";
+    }
+
+    public static string NormalizeLanguageCode(string? lang)
+    {
+        if (string.IsNullOrWhiteSpace(lang)) return "en";
+        string lower = lang.Trim().ToLowerInvariant();
+        return lower switch
+        {
+            "en" or "en-us" or "english" => "en",
+            "es" or "es-es" or "spanish" or "espanol" or "español" => "es",
+            "fr" or "fr-fr" or "french" or "francais" or "français" => "fr",
+            "de" or "de-de" or "german" or "deutsch" => "de",
+            "zh" or "zh-cn" or "chinese" or "中文" or "简体中文" => "zh",
+            "ja" or "ja-jp" or "japanese" or "日本語" => "ja",
+            "pt" or "pt-br" or "pt-pt" or "portuguese" or "portugues" or "português" => "pt",
+            "ru" or "ru-ru" or "russian" or "русский" => "ru",
+            "zu" or "zu-za" or "zulu" or "isizulu" => "zu",
+            "af" or "af-za" or "afrikaans" => "af",
+            _ => "en"
+        };
+    }
+
+    public static string GetNaturalLanguageDisplayName(string langCode)
+    {
+        return NormalizeLanguageCode(langCode) switch
+        {
+            "es" => "🇪🇸 Español (Spanish)",
+            "fr" => "🇫🇷 Français (French)",
+            "de" => "🇩🇪 Deutsch (German)",
+            "zh" => "🇨🇳 简体中文 (Chinese Simplified)",
+            "ja" => "🇯🇵 日本語 (Japanese)",
+            "pt" => "🇧🇷 Português (Portuguese)",
+            "ru" => "🇷🇺 Русский (Russian)",
+            "zu" => "🇿🇦 isiZulu (Zulu)",
+            "af" => "🇿🇦 Afrikaans",
+            _ => "🇺🇸 English (US)"
+        };
+    }
+
+    public static string GetLocalizedTaskInstruction(string langCode)
+    {
+        return NormalizeLanguageCode(langCode) switch
+        {
+            "es" => "Por favor, proporciona todas las explicaciones, revisiones de arquitectura, diagnósticos de errores y comentarios en **Español (Spanish)**, manteniendo los nombres de clases, funciones, variables y rutas de código en su idioma original.",
+            "fr" => "Veuillez fournir toutes les explications, analyses architecturales, diagnostics de bogues et commentaires en **Français (French)**, tout en conservant les identifiants de code, noms de classes, fonctions et chemins de fichiers dans leur forme d'origine.",
+            "de" => "Bitte verfasse alle Erklärungen, Architektur-Analysen, Fehlerdiagnosen und Kommentare auf **Deutsch (German)**, während Code-Bezeichner, Klassennamen, Funktionen und Dateipfade unverändert im Original bleiben.",
+            "zh" => "请使用 **简体中文 (Simplified Chinese)** 提供所有代码解析、架构分析、问题诊断和重构建议；同时请保持代码中的类名、方法名、变量名和文件路径不变。",
+            "ja" => "すべての解説、アーキテクチャ分析、バグ診断、および提案は **日本語 (Japanese)** で記述してください。ただし、コード内のクラス名、関数名、変数名、およびファイルパスは元のまま維持してください。",
+            "pt" => "Por favor, forneça todas as explicações, análises de arquitetura, diagnósticos de bugs e recomendações em **Português (Portuguese)**, mantendo todos os identificadores de código, nomes de classes, métodos e caminhos de arquivos no original.",
+            "ru" => "Пожалуйста, предоставляйте все объяснения, архитектурный анализ, диагностику ошибок и рекомендации на **Русском языке (Russian)**, сохраняя имена классов, методов, переменных и пути к файлам в исходном виде.",
+            "zu" => "Sicela unikeze zonke izincazelo, ukuhlaziywa kwesakhiwoikhozi (architecture), ukuxilongwa kwamaphutha (bugs), nezincomo ngolimi lwesi-**isiZulu**, kodwa ugcine amagama amakilasi (classes), imisebenzi (functions/methods), nezindlela zamafayela (file paths) zinjengoba zinjalo kukhodi.",
+            "af" => "Verskaf asseblief alle verduidelikings, argitektuur-analises, foutdiagnoses en aanbevelings in **Afrikaans**, terwyl alle kode-identifiseerders, klasname, funksies en lêerpaaie onveranderd in hul oorspronklike vorm behou word.",
+            _ => "Provide all explanations and analysis in English."
+        };
     }
 }

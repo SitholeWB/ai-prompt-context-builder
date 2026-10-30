@@ -3,7 +3,7 @@
   "displayName": "AI Context Builder & Prompt Generator",
   "icon": "media/icon.png",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -59,6 +59,7 @@
     "onCommand:aiPromptContextBuilder.generateFromFile",
     "onCommand:aiPromptContextBuilder.generateFromGit",
     "onCommand:aiPromptContextBuilder.draftCommitMessage",
+    "onCommand:aiPromptContextBuilder.changeLanguage",
     "onCommand:aiPromptContextBuilder.generateFromSymbol",
     "onCommand:aiPromptContextBuilder.generateWithOptions",
     "onCommand:aiPromptContextBuilder.generateAndCopy",
@@ -113,6 +114,12 @@
         "category": "AI Context / Prompt"
       },
       {
+        "command": "aiPromptContextBuilder.changeLanguage",
+        "title": "Change Language (EN / ES / FR / DE / ZH / JA / PT / RU / ZU / AF)",
+        "category": "AI Context / Prompt",
+        "icon": "$(globe)"
+      },
+      {
         "command": "aiPromptContextBuilder.generateFromSymbol",
         "title": "AI Prompt: Generate from Symbol at Cursor",
         "category": "AI Context / Prompt"
@@ -159,6 +166,13 @@
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "aiPromptContextBuilder.changeLanguage",
+          "when": "view == aiPromptContextBuilder.actionsView",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "command": "aiPromptContextBuilder.generateFromFile",
@@ -186,6 +200,24 @@
           "type": "string",
           "default": "",
           "description": "Optional default directory to write generated context Markdown files."
+        },
+        "aiPromptContextBuilder.outputLanguage": {
+          "type": "string",
+          "default": "en",
+          "enum": ["en", "es", "fr", "de", "zh", "ja", "pt", "ru", "zu", "af"],
+          "enumDescriptions": [
+            "🇺🇸 English (US) — United States / Global",
+            "🇪🇸 Español — España / Latinoamérica",
+            "🇫🇷 Français — France / Europe",
+            "🇩🇪 Deutsch — Deutschland / DACH",
+            "🇨🇳 简体中文 — Asia / Global",
+            "🇯🇵 日本語 — Japan",
+            "🇧🇷 Português — Brasil / Portugal",
+            "🇷🇺 Русский — Eastern Europe / CIS",
+            "🇿🇦 isiZulu — South Africa / SADC",
+            "🇿🇦 Afrikaans — Suid-Afrika / Namibia"
+          ],
+          "description": "Display language and AI response language for generated prompts & commit messages."
         },
         "aiPromptContextBuilder.defaultLanguage": {
           "type": "string",

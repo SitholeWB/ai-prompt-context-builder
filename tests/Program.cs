@@ -70,6 +70,7 @@ public class Program
         await RunTestAsync("38. Git Changes Options: Dependencies Tree Only (No Diff Text) & Single File Git Diff", TestGitChangesNoDiffAndSingleFile);
         await RunTestAsync("39. Git Branch / Pull Request Comparison & Last X Commits + Dependencies Tree", TestGitBranchCompareAndLastCommits);
         RunTest("40. Deterministic AST + Diff Git Commit Message Drafter (No AI)", TestGitCommitDraftService);
+        await RunTestAsync("41. Multi-Language Localization: isiZulu, Español & 10-Language Prompt Output", TestMultiLanguageOutputLocalization);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -977,11 +978,53 @@ public class Program
             Assert(draft.FullCommitMessage.Contains("InvoiceService.cs"), "Body lists modified InvoiceService.cs");
             Assert(draft.FullCommitMessage.Contains("RefundInvoice"), "Body extracts added symbol RefundInvoice from diff");
             Assert(draft.FullCommitMessage.Contains("PaymentGateway.ts"), "Body lists untracked added file PaymentGateway.ts");
+
+            // Also verify isiZulu commit draft localization
+            var draftZu = GitCommitDraftService.DraftCommitMessage(tempRepo, GitScopeMode.AllChanges, "zu");
+            Assert(draftZu.Success, "isiZulu DraftCommitMessage succeeded");
+            Assert(draftZu.FullCommitMessage.Contains("feat(billing):"), "isiZulu draft preserves Conventional Commit prefix feat(billing):");
+            Assert(draftZu.FullCommitMessage.Contains("engeza") || draftZu.FullCommitMessage.Contains("buyekeza"), "isiZulu draft uses isiZulu action verbs");
         }
         finally
         {
             try { Directory.Delete(tempRepo, true); } catch { }
         }
+    }
+
+    private static async Task TestMultiLanguageOutputLocalization()
+    {
+        string root = ResolveFixture("tests/fixtures/cpp/OrderService.cpp");
+        string ws = ResolveFixture("tests/fixtures/cpp");
+        var orchestrator = new ContextOrchestrator();
+
+        // 1. Test isiZulu (zu)
+        var zuRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Cpp,
+            OutputLanguage = "zu",
+            SaveToFile = false
+        });
+
+        Assert(zuRes.Success, $"isiZulu context generation succeeded: {zuRes.ErrorMessage}");
+        Assert(zuRes.GeneratedMarkdown!.Contains("🇿🇦 isiZulu (Zulu)"), "Markdown includes isiZulu language badge");
+        Assert(zuRes.GeneratedMarkdown.Contains("Sicela unikeze zonke izincazelo"), "Markdown includes isiZulu response instruction");
+        Assert(zuRes.GeneratedMarkdown.Contains("- Response Language: 🇿🇦 isiZulu (Zulu)"), "Target Scope includes Response Language metadata");
+
+        // 2. Test Español (es)
+        var esRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+        {
+            RootPath = root,
+            WorkspacePath = ws,
+            Language = LanguageName.Cpp,
+            OutputLanguage = "es",
+            SaveToFile = false
+        });
+
+        Assert(esRes.Success, $"Español context generation succeeded: {esRes.ErrorMessage}");
+        Assert(esRes.GeneratedMarkdown!.Contains("🇪🇸 Español (Spanish)"), "Markdown includes Español language badge");
+        Assert(esRes.GeneratedMarkdown.Contains("Por favor, proporciona todas las explicaciones"), "Markdown includes Spanish response instruction");
     }
 
     private static void RunGitCmd(string workDir, string args)

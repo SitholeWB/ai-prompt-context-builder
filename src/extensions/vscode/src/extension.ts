@@ -5,10 +5,356 @@ import * as fs from 'fs';
 import * as http from 'http';
 
 type GitScopeType = 'none' | 'all' | 'staged' | 'unstaged' | 'file' | 'branch' | 'commits' | 'draftCommit';
+type SupportedLanguageCode = 'en' | 'es' | 'fr' | 'de' | 'zh' | 'ja' | 'pt' | 'ru' | 'zu' | 'af';
+
+interface LanguageOption {
+  code: SupportedLanguageCode;
+  badge: string;
+  flag: string;
+  nativeName: string;
+  englishName: string;
+  regionSubtitle: string;
+}
+
+const LANGUAGE_CATALOG: LanguageOption[] = [
+  {
+    code: 'en',
+    badge: 'EN',
+    flag: '🇺🇸',
+    nativeName: 'English (US)',
+    englishName: 'English',
+    regionSubtitle: 'English • United States / Global',
+  },
+  {
+    code: 'es',
+    badge: 'ES',
+    flag: '🇪🇸',
+    nativeName: 'Español',
+    englishName: 'Spanish',
+    regionSubtitle: 'Spanish • España / Latinoamérica',
+  },
+  {
+    code: 'fr',
+    badge: 'FR',
+    flag: '🇫🇷',
+    nativeName: 'Français',
+    englishName: 'French',
+    regionSubtitle: 'French • France / Europe',
+  },
+  {
+    code: 'de',
+    badge: 'DE',
+    flag: '🇩🇪',
+    nativeName: 'Deutsch',
+    englishName: 'German',
+    regionSubtitle: 'German • Deutschland / DACH',
+  },
+  {
+    code: 'zh',
+    badge: 'ZH',
+    flag: '🇨🇳',
+    nativeName: '简体中文',
+    englishName: 'Chinese',
+    regionSubtitle: 'Chinese • Asia / Global',
+  },
+  {
+    code: 'ja',
+    badge: 'JA',
+    flag: '🇯🇵',
+    nativeName: '日本語',
+    englishName: 'Japanese',
+    regionSubtitle: 'Japanese • Japan',
+  },
+  {
+    code: 'pt',
+    badge: 'PT',
+    flag: '🇧🇷',
+    nativeName: 'Português',
+    englishName: 'Portuguese',
+    regionSubtitle: 'Portuguese • Brasil / Portugal',
+  },
+  {
+    code: 'ru',
+    badge: 'RU',
+    flag: '🇷🇺',
+    nativeName: 'Русский',
+    englishName: 'Russian',
+    regionSubtitle: 'Russian • Eastern Europe / CIS',
+  },
+  {
+    code: 'zu',
+    badge: 'ZU',
+    flag: '🇿🇦',
+    nativeName: 'isiZulu',
+    englishName: 'Zulu',
+    regionSubtitle: 'Zulu • South Africa / SADC',
+  },
+  {
+    code: 'af',
+    badge: 'AF',
+    flag: '🇿🇦',
+    nativeName: 'Afrikaans',
+    englishName: 'Afrikaans',
+    regionSubtitle: 'Afrikaans • Suid-Afrika / Namibia',
+  },
+];
+
+interface LocalizedUiStrings {
+  generatePrompt: string;
+  interactivePopup: string;
+  draftCommit: string;
+  noAiBuiltIn: string;
+  allGitChanges: string;
+  stagedUnstaged: string;
+  stagedOnly: string;
+  unstagedOnly: string;
+  compareBranch: string;
+  lastXCommits: string;
+  activeFileDeps: string;
+  activeFileGit: string;
+  symbolAtCursor: string;
+  checkWorkers: string;
+  changeLanguage: string;
+  languageChangedMsg: (lang: LanguageOption) => string;
+  exportDefaults: string;
+  customOptions: string;
+  chooseExportMode: string;
+}
+
+const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
+  en: {
+    generatePrompt: 'Generate AI Prompt & Context...',
+    interactivePopup: 'Interactive Popup',
+    draftCommit: 'Draft Git Commit Message...',
+    noAiBuiltIn: 'No AI / Built-in LM',
+    allGitChanges: 'All Git Changes + Dependencies',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'Staged Git Changes ONLY',
+    unstagedOnly: 'Unstaged Git Changes ONLY',
+    compareBranch: 'Compare Branch / Pull Request...',
+    lastXCommits: 'Last X Commits + Dependencies...',
+    activeFileDeps: 'Active File: Dependencies Only',
+    activeFileGit: 'Active File: Git Diff + Dependencies',
+    symbolAtCursor: 'Symbol at Cursor + Dependencies',
+    checkWorkers: 'Check Language Workers',
+    changeLanguage: 'Change Language',
+    languageChangedMsg: (l) => `Language set to ${l.flag} ${l.nativeName} (${l.badge}). Generated AI prompts and UI labels will now use ${l.nativeName}.`,
+    exportDefaults: '$(zap) Export with Defaults',
+    customOptions: '$(gear) Custom Options...',
+    chooseExportMode: 'Choose Export Mode',
+  },
+  es: {
+    generatePrompt: 'Generar Prompt y Contexto IA...',
+    interactivePopup: 'Menú Interactivo',
+    draftCommit: 'Redactar Mensaje de Commit Git...',
+    noAiBuiltIn: 'Sin IA / Modelo Integrado',
+    allGitChanges: 'Todos los Cambios Git + Dependencias',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'SOLO Cambios Git Staged',
+    unstagedOnly: 'SOLO Cambios Git Unstaged',
+    compareBranch: 'Comparar Rama / Pull Request...',
+    lastXCommits: 'Últimos X Commits + Dependencias...',
+    activeFileDeps: 'Archivo Activo: Solo Dependencias',
+    activeFileGit: 'Archivo Activo: Diff Git + Dependencias',
+    symbolAtCursor: 'Símbolo en Cursor + Dependencias',
+    checkWorkers: 'Verificar Analizadores de Lenguaje',
+    changeLanguage: 'Cambiar Idioma (Change Language)',
+    languageChangedMsg: (l) => `Idioma cambiado a ${l.flag} ${l.nativeName} (${l.badge}). Los prompts de IA y el menú ahora usarán ${l.nativeName}.`,
+    exportDefaults: '$(zap) Exportar con Valores Predeterminados',
+    customOptions: '$(gear) Opciones Personalizadas...',
+    chooseExportMode: 'Elegir Modo de Exportación',
+  },
+  fr: {
+    generatePrompt: 'Générer Prompt & Contexte IA...',
+    interactivePopup: 'Menu Interactif',
+    draftCommit: 'Rédiger un Message de Commit Git...',
+    noAiBuiltIn: 'Sans IA / Modèle Intégré',
+    allGitChanges: 'Tous les Changements Git + Dépendances',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'Changements Git Staged UNIQUEMENT',
+    unstagedOnly: 'Changements Git Unstaged UNIQUEMENT',
+    compareBranch: 'Comparer Branche / Pull Request...',
+    lastXCommits: 'X Derniers Commits + Dépendances...',
+    activeFileDeps: 'Fichier Actif : Dépendances Seules',
+    activeFileGit: 'Fichier Actif : Diff Git + Dépendances',
+    symbolAtCursor: 'Symbole sous le Curseur + Dépendances',
+    checkWorkers: 'Vérifier les Analyseurs de Langage',
+    changeLanguage: 'Changer de Langue (Change Language)',
+    languageChangedMsg: (l) => `Langue définie sur ${l.flag} ${l.nativeName} (${l.badge}). Les prompts IA utiliseront désormais ${l.nativeName}.`,
+    exportDefaults: '$(zap) Exporter par Défaut',
+    customOptions: '$(gear) Options Personnalisées...',
+    chooseExportMode: "Choisir le Mode d'Exportation",
+  },
+  de: {
+    generatePrompt: 'KI-Prompt & Kontext generieren...',
+    interactivePopup: 'Interaktives Menü',
+    draftCommit: 'Git-Commit-Nachricht entwerfen...',
+    noAiBuiltIn: 'Ohne KI / Integriertes Modell',
+    allGitChanges: 'Alle Git-Änderungen + Abhängigkeiten',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'NUR Staged Git-Änderungen',
+    unstagedOnly: 'NUR Unstaged Git-Änderungen',
+    compareBranch: 'Branch / Pull Request vergleichen...',
+    lastXCommits: 'Letzte X Commits + Abhängigkeiten...',
+    activeFileDeps: 'Aktive Datei: Nur Abhängigkeiten',
+    activeFileGit: 'Aktive Datei: Git-Diff + Abhängigkeiten',
+    symbolAtCursor: 'Symbol am Cursor + Abhängigkeiten',
+    checkWorkers: 'Sprach-Analysatoren prüfen',
+    changeLanguage: 'Sprache ändern (Change Language)',
+    languageChangedMsg: (l) => `Sprache auf ${l.flag} ${l.nativeName} (${l.badge}) eingestellt.`,
+    exportDefaults: '$(zap) Mit Standardwerten exportieren',
+    customOptions: '$(gear) Benutzerdefinierte Optionen...',
+    chooseExportMode: 'Exportmodus wählen',
+  },
+  zh: {
+    generatePrompt: '生成 AI 提示词与代码上下文...',
+    interactivePopup: '交互式菜单',
+    draftCommit: '起草 Git 提交信息 (Commit)...',
+    noAiBuiltIn: '无 AI 规则 / 内置模型',
+    allGitChanges: '所有 Git 更改 + 依赖树',
+    stagedUnstaged: '暂存 + 未暂存',
+    stagedOnly: '仅已暂存 (Staged) Git 更改',
+    unstagedOnly: '仅未暂存 (Unstaged) Git 更改',
+    compareBranch: '比较分支 / Pull Request...',
+    lastXCommits: '最近 X 次提交 + 依赖树...',
+    activeFileDeps: '当前文件：仅依赖树',
+    activeFileGit: '当前文件：Git Diff + 依赖树',
+    symbolAtCursor: '光标处符号 + 依赖树',
+    checkWorkers: '检查语言分析引擎',
+    changeLanguage: '切换语言 (Change Language)',
+    languageChangedMsg: (l) => `语言已切换为 ${l.flag} ${l.nativeName} (${l.badge})。生成的 AI 提示词将要求使用${l.nativeName}回复。`,
+    exportDefaults: '$(zap) 使用默认设置快速导出',
+    customOptions: '$(gear) 自定义选项...',
+    chooseExportMode: '选择导出模式',
+  },
+  ja: {
+    generatePrompt: 'AIプロンプトとコンテキストを生成...',
+    interactivePopup: '対話型ポップアップ',
+    draftCommit: 'Gitコミットメッセージを作成...',
+    noAiBuiltIn: 'AIなし / 内蔵モデル',
+    allGitChanges: 'すべてのGit変更 + 依存関係ツリー',
+    stagedUnstaged: 'ステージ済 + 未ステージ',
+    stagedOnly: 'ステージ済 (Staged) Git変更のみ',
+    unstagedOnly: '未ステージ (Unstaged) Git変更のみ',
+    compareBranch: 'ブランチ / PR を比較...',
+    lastXCommits: '直近 X 件のコミット + 依存関係...',
+    activeFileDeps: '現在のファイル: 依存関係のみ',
+    activeFileGit: '現在のファイル: Git Diff + 依存関係',
+    symbolAtCursor: 'カーソル位置のシンボル + 依存関係',
+    checkWorkers: '言語アナライザーを確認',
+    changeLanguage: '言語を変更 (Change Language)',
+    languageChangedMsg: (l) => `言語を ${l.flag} ${l.nativeName} (${l.badge}) に設定しました。`,
+    exportDefaults: '$(zap) デフォルト設定でエクスポート',
+    customOptions: '$(gear) カスタムオプション...',
+    chooseExportMode: 'エクスポートモードを選択',
+  },
+  pt: {
+    generatePrompt: 'Gerar Prompt e Contexto de IA...',
+    interactivePopup: 'Menu Interativo',
+    draftCommit: 'Redigir Mensagem de Commit Git...',
+    noAiBuiltIn: 'Sem IA / Modelo Integrado',
+    allGitChanges: 'Todas as Alterações Git + Dependências',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'APENAS Alterações Git Staged',
+    unstagedOnly: 'APENAS Alterações Git Unstaged',
+    compareBranch: 'Comparar Branch / Pull Request...',
+    lastXCommits: 'Últimos X Commits + Dependências...',
+    activeFileDeps: 'Arquivo Ativo: Apenas Dependências',
+    activeFileGit: 'Arquivo Ativo: Diff Git + Dependências',
+    symbolAtCursor: 'Símbolo no Cursor + Dependências',
+    checkWorkers: 'Verificar Analisadores de Linguagem',
+    changeLanguage: 'Alterar Idioma (Change Language)',
+    languageChangedMsg: (l) => `Idioma alterado para ${l.flag} ${l.nativeName} (${l.badge}).`,
+    exportDefaults: '$(zap) Exportar com Padrões',
+    customOptions: '$(gear) Opções Personalizadas...',
+    chooseExportMode: 'Escolher Modo de Exportação',
+  },
+  ru: {
+    generatePrompt: 'Создать AI-промпт и контекст...',
+    interactivePopup: 'Интерактивное меню',
+    draftCommit: 'Создать сообщение Git Commit...',
+    noAiBuiltIn: 'Без ИИ / Встроенная модель',
+    allGitChanges: 'Все изменения Git + Зависимости',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'ТОЛЬКО Staged изменения Git',
+    unstagedOnly: 'ТОЛЬКО Unstaged изменения Git',
+    compareBranch: 'Сравнить ветку / Pull Request...',
+    lastXCommits: 'Последние X коммитов + Зависимости...',
+    activeFileDeps: 'Активный файл: Только зависимости',
+    activeFileGit: 'Активный файл: Git Diff + Зависимости',
+    symbolAtCursor: 'Символ под курсором + Зависимости',
+    checkWorkers: 'Проверить языковые анализаторы',
+    changeLanguage: 'Изменить язык (Change Language)',
+    languageChangedMsg: (l) => `Язык изменен на ${l.flag} ${l.nativeName} (${l.badge}).`,
+    exportDefaults: '$(zap) Экспорт по умолчанию',
+    customOptions: '$(gear) Пользовательские настройки...',
+    chooseExportMode: 'Выберите режим экспорта',
+  },
+  zu: {
+    generatePrompt: 'Khiqiza i-AI Prompt kanye ne-Context...',
+    interactivePopup: 'Imenyu Yokukhetha',
+    draftCommit: 'Bhala Umlayezo we-Git Commit...',
+    noAiBuiltIn: 'Ngaphandle kwe-AI / Imodeli Yangaphakathi',
+    allGitChanges: 'Zonke Izinguquko ze-Git + ama-Dependencies',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'Izinguquko ze-Git ezi-Staged KUPHELA',
+    unstagedOnly: 'Izinguquko ze-Git ezi-Unstaged KUPHELA',
+    compareBranch: 'Qhathanisa i-Branch / Pull Request...',
+    lastXCommits: 'Ama-Commits Okugcina angu-X + Dependencies...',
+    activeFileDeps: 'Ifayela Elivuliwe: Ama-Dependencies Kuphela',
+    activeFileGit: 'Ifayela Elivuliwe: Git Diff + Dependencies',
+    symbolAtCursor: 'Igama elikwi-Cursor + Dependencies',
+    checkWorkers: 'Hlola Izinjini Zokuhlaziya Izilimi',
+    changeLanguage: 'Shintsha Ulimi (Change Language)',
+    languageChangedMsg: (l) => `Ulimi lushintshiwe lwaba yi-${l.flag} ${l.nativeName} (${l.badge}). Ama-AI Prompts azophuma ngesiZulu.`,
+    exportDefaults: '$(zap) Khiqiza Ngokushesha (Defaults)',
+    customOptions: '$(gear) Izinketho Ezikhethekile (Custom Options)...',
+    chooseExportMode: 'Khetha Indlela Yokukhiqiza',
+  },
+  af: {
+    generatePrompt: 'Genereer KI-Prompt & Konteks...',
+    interactivePopup: 'Interaktiewe Kieslys',
+    draftCommit: 'Skryf Git-Commit-Boodskap...',
+    noAiBuiltIn: 'Geen KI / Ingeboude Model',
+    allGitChanges: 'Alle Git-Veranderinge + Afhanklikhede',
+    stagedUnstaged: 'Staged + Unstaged',
+    stagedOnly: 'SLEGS Staged Git-Veranderinge',
+    unstagedOnly: 'SLEGS Unstaged Git-Veranderinge',
+    compareBranch: 'Vergelyk Tak / Pull Request...',
+    lastXCommits: 'Laaste X Commits + Afhanklikhede...',
+    activeFileDeps: 'Aktiewe Lêer: Slegs Afhanklikhede',
+    activeFileGit: 'Aktiewe Lêer: Git-Diff + Afhanklikhede',
+    symbolAtCursor: 'Simbool by Wyser + Afhanklikhede',
+    checkWorkers: 'Kontroleer Taalanaliseerders',
+    changeLanguage: 'Verander Taal (Change Language)',
+    languageChangedMsg: (l) => `Taal gestel op ${l.flag} ${l.nativeName} (${l.badge}).`,
+    exportDefaults: '$(zap) Voer uit met Verstekwaardes',
+    customOptions: '$(gear) Pasgemaakte Opsies...',
+    chooseExportMode: 'Kies Uitvoermodus',
+  },
+};
+
+function getActiveLanguageCode(): SupportedLanguageCode {
+  const fromState = extContext?.globalState.get<string>('outputLanguage');
+  const fromConfig = vscode.workspace.getConfiguration('aiPromptContextBuilder').get<string>('outputLanguage');
+  const raw = (fromState || fromConfig || 'en').toLowerCase();
+  const match = LANGUAGE_CATALOG.find((l) => l.code === raw);
+  return match ? match.code : 'en';
+}
+
+function getActiveLanguageOption(): LanguageOption {
+  const code = getActiveLanguageCode();
+  return LANGUAGE_CATALOG.find((l) => l.code === code) || LANGUAGE_CATALOG[0];
+}
+
+function getUiStrings(): LocalizedUiStrings {
+  return UI_STRINGS[getActiveLanguageCode()] || UI_STRINGS.en;
+}
 
 let lastGeneratedPath: string | null = null;
 let outputChannel: vscode.OutputChannel;
 let extContext: vscode.ExtensionContext;
+let actionsTreeProvider: ActionsTreeProvider;
 let historyTreeProvider: HistoryTreeProvider;
 
 function resolveTargetFilePath(uri?: vscode.Uri): string | undefined {
@@ -30,10 +376,10 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(outputChannel);
 
   // Register Activity Bar Sidebar Views
-  const actionsProvider = new ActionsTreeProvider();
+  actionsTreeProvider = new ActionsTreeProvider();
   historyTreeProvider = new HistoryTreeProvider(context);
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('aiPromptContextBuilder.actionsView', actionsProvider),
+    vscode.window.registerTreeDataProvider('aiPromptContextBuilder.actionsView', actionsTreeProvider),
     vscode.window.registerTreeDataProvider('aiPromptContextBuilder.historyView', historyTreeProvider)
   );
 
@@ -42,6 +388,11 @@ export function activate(context: vscode.ExtensionContext) {
     // Register backwards-compatible alias
     context.subscriptions.push(vscode.commands.registerCommand(`aiContextBuilder.${name}`, handler));
   };
+
+  // 1f. Change Language (Header Globe Icon + Bottom of Sidebar + Command Palette)
+  registerCmd('changeLanguage', async () => {
+    await promptAndChangeLanguage();
+  });
 
   // 1. Single Right-Click & Interactive Popup Entry Point
   registerCmd('generateFromFile', async (uri?: vscode.Uri) => {
@@ -605,21 +956,25 @@ async function showScopeAndExportPopups(
   }
 
   // Popup 3: Export with Defaults vs Custom Options
+  const ui = getUiStrings();
+  const activeLang = getActiveLanguageOption();
   const modePick = await vscode.window.showQuickPick(
     [
       {
-        label: '$(zap) Export with Defaults',
-        description: 'Instant Generation (Recommended)',
+        label: ui.exportDefaults,
+        description: `Instant Generation • ${activeLang.flag} ${activeLang.nativeName}`,
         detail: 'Full dependency graph, automatic token budget, comments preserved, tools/lockfiles excluded',
+        isDefaults: true,
       },
       {
-        label: '$(gear) Custom Options...',
+        label: ui.customOptions,
         description: 'Step-by-Step Configuration',
-        detail: 'Configure token budget, comment stripping, traversal depth, output destination & custom prompt',
+        detail: 'Configure token budget, comment stripping, traversal depth, output language, destination & custom prompt',
+        isDefaults: false,
       },
     ],
     {
-      title: 'Choose Export Mode',
+      title: `${ui.chooseExportMode} (${activeLang.flag} ${activeLang.nativeName})`,
       placeHolder: 'Instant Defaults or Step-by-Step Custom Options',
     }
   );
@@ -631,11 +986,12 @@ async function showScopeAndExportPopups(
     workspacePath: workspaceFolder,
     compareBranch,
     commitCount,
+    outputLanguage: activeLang.code,
   };
 
   const targetPath = filePath || workspaceFolder || '';
 
-  if (modePick.label.includes('Defaults')) {
+  if (modePick.isDefaults) {
     await runGeneration(targetPath, baseOptions);
   } else {
     await promptAndRunCustomOptions(targetPath, baseOptions);
@@ -722,9 +1078,26 @@ async function promptAndRunCustomOptions(filePath: string, baseOptions: RunOptio
     copyToClipboard = true;
   }
 
-  // Step 5: Optional Custom Task Prompt
+  // Step 5: Response / Output Language
+  const currentLang = getActiveLanguageOption();
+  const langItems = LANGUAGE_CATALOG.map((l) => ({
+    label: `${l.flag} ${l.nativeName}`,
+    description: l.code === currentLang.code ? `${l.badge} • Current Default` : l.badge,
+    detail: l.regionSubtitle,
+    code: l.code,
+  }));
+  // Put current language at the top
+  langItems.sort((a, b) => (a.code === currentLang.code ? -1 : b.code === currentLang.code ? 1 : 0));
+
+  const langPick = await vscode.window.showQuickPick(langItems, {
+    title: 'Step 5/6: Select AI Prompt Response Language',
+    placeHolder: `Current: ${currentLang.flag} ${currentLang.nativeName} (${currentLang.regionSubtitle})`,
+  });
+  if (!langPick) return;
+
+  // Step 6: Optional Custom Task Prompt
   const taskInput = await vscode.window.showInputBox({
-    prompt: 'Step 5/5: (Optional) Enter custom instructions or goal for the AI prompt',
+    prompt: 'Step 6/6: (Optional) Enter custom instructions or goal for the AI prompt',
     placeHolder: 'e.g. Refactor this service to use asynchronous patterns, or Add unit tests'
   });
 
@@ -735,6 +1108,7 @@ async function promptAndRunCustomOptions(filePath: string, baseOptions: RunOptio
     maxDepth,
     saveToFile,
     copyToClipboard,
+    outputLanguage: langPick.code,
     task: taskInput || undefined,
   });
 }
@@ -752,6 +1126,7 @@ interface RunOptions {
   workspacePath?: string;
   compareBranch?: string;
   commitCount?: number;
+  outputLanguage?: SupportedLanguageCode;
 }
 
 async function runGeneration(filePath: string, options: RunOptions) {
@@ -803,6 +1178,11 @@ async function runGeneration(filePath: string, options: RunOptions) {
       if (options.maxDepth) args.push('--max-depth', options.maxDepth.toString());
       if (options.commentMode) args.push('--comments', options.commentMode.toLowerCase());
       if (options.task) args.push('--task', options.task);
+
+      const effectiveLang = options.outputLanguage || getActiveLanguageCode();
+      if (effectiveLang && effectiveLang !== 'en') {
+        args.push('--output-language', effectiveLang);
+      }
 
       const spec = resolveCommand(args);
       outputChannel.appendLine(`[Execute] ${spec.command} ${spec.args.join(' ')} (resolved via ${spec.description})`);
@@ -1006,36 +1386,46 @@ class ActionTreeItem extends vscode.TreeItem {
 }
 
 class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<ActionTreeItem | undefined | void>();
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  refresh() {
+    this._onDidChangeTreeData.fire();
+  }
+
   getTreeItem(element: ActionTreeItem): vscode.TreeItem {
     return element;
   }
 
   getChildren(): vscode.ProviderResult<ActionTreeItem[]> {
+    const ui = getUiStrings();
+    const lang = getActiveLanguageOption();
+
     return [
       new ActionTreeItem(
-        'Generate AI Prompt & Context...',
-        'Interactive Popup',
+        ui.generatePrompt,
+        ui.interactivePopup,
         'Open the full interactive popup selector (Dependencies Only vs Git Scopes, Diff Options & Export Mode)',
         'sparkle',
         'aiPromptContextBuilder.generateFromFile'
       ),
       new ActionTreeItem(
-        'Draft Git Commit Message...',
-        'No AI / Built-in LM',
+        ui.draftCommit,
+        ui.noAiBuiltIn,
         'Draft a Conventional Commit message from uncommitted changes (AST rules or VS Code built-in model) and fill the Git commit box',
         'comment-discussion',
         'aiPromptContextBuilder.draftCommitMessage'
       ),
       new ActionTreeItem(
-        'All Git Changes + Dependencies',
-        'Staged + Unstaged',
+        ui.allGitChanges,
+        ui.stagedUnstaged,
         'Select All Git Changes and open popup for Diff & Export options',
         'git-merge',
         'aiPromptContextBuilder.generateWithScopePopup',
         ['all']
       ),
       new ActionTreeItem(
-        'Staged Git Changes ONLY',
+        ui.stagedOnly,
         'git diff --cached',
         'Select Staged Git Changes ONLY and open popup for Diff & Export options',
         'diff-added',
@@ -1043,7 +1433,7 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         ['staged']
       ),
       new ActionTreeItem(
-        'Unstaged Git Changes ONLY',
+        ui.unstagedOnly,
         'git diff',
         'Select Unstaged Git Changes ONLY and open popup for Diff & Export options',
         'diff-modified',
@@ -1051,7 +1441,7 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         ['unstaged']
       ),
       new ActionTreeItem(
-        'Compare Branch / Pull Request...',
+        ui.compareBranch,
         'PR / Branch Diff',
         'Compare current branch against main/develop/origin and resolve all PR files + dependency trees',
         'git-pull-request',
@@ -1059,7 +1449,7 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         ['branch']
       ),
       new ActionTreeItem(
-        'Last X Commits + Dependencies...',
+        ui.lastXCommits,
         'Recent Commits',
         'Select last 1, 2, 3, 5, or N commits and resolve all modified files + dependency trees',
         'git-commit',
@@ -1067,7 +1457,7 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         ['commits']
       ),
       new ActionTreeItem(
-        'Active File: Dependencies Only',
+        ui.activeFileDeps,
         'No Git Diff',
         'Trace dependency tree of the active editor file (opens Export Mode popup)',
         'file-code',
@@ -1075,7 +1465,7 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         ['none']
       ),
       new ActionTreeItem(
-        'Active File: Git Diff + Dependencies',
+        ui.activeFileGit,
         'Single File',
         'Trace dependency tree of the active editor file and include its Git diff',
         'diff',
@@ -1083,21 +1473,64 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         ['file']
       ),
       new ActionTreeItem(
-        'Symbol at Cursor + Dependencies',
+        ui.symbolAtCursor,
         'Focused Root',
         'Generate context rooted at the symbol under the cursor',
         'symbol-method',
         'aiPromptContextBuilder.generateFromSymbol'
       ),
       new ActionTreeItem(
-        'Check Language Workers',
+        ui.checkWorkers,
         'Diagnostics',
         'Verify compiler & analyzer status across .NET, TypeScript, Python, Rust, Go, Java, C++, PHP, Dart & Kotlin',
         'check-all',
         'aiPromptContextBuilder.checkWorkers'
       ),
+      new ActionTreeItem(
+        ui.changeLanguage,
+        `${lang.flag} ${lang.nativeName} (${lang.badge})`,
+        `Current Language: ${lang.flag} ${lang.nativeName} — ${lang.regionSubtitle}. Click to switch language (EN, ES, FR, DE, ZH, JA, PT, RU, ZU, AF).`,
+        'globe',
+        'aiPromptContextBuilder.changeLanguage'
+      ),
     ];
   }
+}
+
+async function promptAndChangeLanguage() {
+  const current = getActiveLanguageOption();
+
+  const items = LANGUAGE_CATALOG.map((l) => ({
+    label: `${l.flag}  ${l.nativeName}`,
+    description: l.code === current.code ? `${l.badge}   $(check) Active` : `${l.badge}   Select`,
+    detail: l.regionSubtitle,
+    option: l,
+  }));
+
+  const pick = await vscode.window.showQuickPick(items, {
+    title: `Change Language — Language • ${current.flag} ${current.nativeName}`,
+    placeHolder: 'Select language for Sidebar UI, AI Prompt Explanations & Git Commit Drafts',
+  });
+  if (!pick) return;
+
+  const chosen = pick.option;
+  if (extContext) {
+    await extContext.globalState.update('outputLanguage', chosen.code);
+  }
+  try {
+    await vscode.workspace
+      .getConfiguration('aiPromptContextBuilder')
+      .update('outputLanguage', chosen.code, vscode.ConfigurationTarget.Global);
+  } catch {
+    // ignore config write errors if setting is not registered in host yet
+  }
+
+  if (actionsTreeProvider) {
+    actionsTreeProvider.refresh();
+  }
+
+  const newUi = getUiStrings();
+  vscode.window.showInformationMessage(newUi.languageChangedMsg(chosen));
 }
 
 interface HistoryEntry {
@@ -1278,9 +1711,13 @@ async function promptAndDraftCommitMessage(filePath?: string) {
     async (progress, token) => {
       progress.report({ message: 'Analyzing Git diff & AST symbols...' });
 
+      const activeLang = getActiveLanguageOption();
       const args = ['draft-commit', '--workspace', workspaceFolder, '--format', 'json'];
       if (scopePick.flag) {
         args.push(scopePick.flag);
+      }
+      if (activeLang.code !== 'en') {
+        args.push('--output-language', activeLang.code);
       }
 
       const spec = resolveCommand(args);
@@ -1427,8 +1864,15 @@ async function tryRefineWithLocalOllama(draftJson: any): Promise<string | undefi
 }
 
 function buildCommitRefinePrompt(draftJson: any): string {
+  const activeLang = getActiveLanguageOption();
+  const langInstruction =
+    activeLang.code === 'en'
+      ? 'Write the commit description in English.'
+      : `Write the commit subject description and bullet points in ${activeLang.nativeName} (${activeLang.englishName}), while keeping the Conventional Commit type prefix (e.g. feat, fix, refactor) and code symbol names intact.`;
+
   return [
     'Write a clean, concise Conventional Commit message (subject line + bullet-point body) for the following uncommitted changes.',
+    langInstruction,
     'Output ONLY the raw commit message text without markdown code fences or commentary.',
     '',
     'AST Baseline Draft:',
