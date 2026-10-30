@@ -1,13 +1,37 @@
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Root Node -->
-  <circle cx="6" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
-  <!-- Child Nodes -->
-  <circle cx="18" cy="6" r="2.5" stroke="currentColor" stroke-width="2"/>
-  <circle cx="18" cy="18" r="2.5" stroke="currentColor" stroke-width="2"/>
-  <!-- Connecting Dependency Edges -->
-  <path d="M8.8 10.7L15.6 7.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  <path d="M8.8 13.3L15.6 16.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-  <!-- AI Sparkle Accent -->
-  <path d="M12 2L12.9 4.1L15 5L12.9 5.9L12 8L11.1 5.9L9 5L11.1 4.1L12 2Z" fill="currentColor"/>
-</svg>
+  <!-- Left Curly Brace '{' (matching icon.png) -->
+  <path d="M7.5 3.5H5.8C4.69543 3.5 3.8 4.39543 3.8 5.5V9.6C3.8 10.9255 2.72548 12 1.4 12C2.72548 12 3.8 13.0745 3.8 14.4V18.5C3.8 19.6046 4.69543 20.5 5.8 20.5H7.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Right Curly Brace '}' (matching icon.png) -->
+  <path d="M16.5 3.5H18.2C19.3046 3.5 20.2 4.39543 20.2 5.5V9.6C20.2 10.9255 21.2745 12 22.6 12C21.2745 12 20.2 13.0745 20.2 14.4V18.5C20.2 19.6046 19.3046 20.5 18.2 20.5H16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
 
+  <!-- Outer Top & Bottom Anchor Edges -->
+  <line x1="12" y1="3.2" x2="12" y2="7.2" stroke="currentColor" stroke-width="0.95"/>
+  <line x1="12" y1="3.2" x2="8.2" y2="8.8" stroke="currentColor" stroke-width="0.9"/>
+  <line x1="12" y1="3.2" x2="15.8" y2="8.8" stroke="currentColor" stroke-width="0.9"/>
+  <line x1="12" y1="16.2" x2="12" y2="20.8" stroke="currentColor" stroke-width="0.95"/>
+  <line x1="9.2" y1="15.2" x2="12" y2="20.8" stroke="currentColor" stroke-width="0.9"/>
+  <line x1="14.8" y1="15.2" x2="12" y2="20.8" stroke="currentColor" stroke-width="0.9"/>
+
+  <!-- Inner Brain / Dependency Graph Mesh -->
+  <path d="M8.2 8.8L12 7.2L15.8 8.8L16.8 12.2L14.8 15.2L9.2 15.2L7.2 12.2L8.2 8.8Z" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/>
+  <line x1="12" y1="7.2" x2="12" y2="12" stroke="currentColor" stroke-width="0.85"/>
+  <line x1="8.2" y1="8.8" x2="12" y2="12" stroke="currentColor" stroke-width="0.85"/>
+  <line x1="15.8" y1="8.8" x2="12" y2="12" stroke="currentColor" stroke-width="0.85"/>
+  <line x1="7.2" y1="12.2" x2="16.8" y2="12.2" stroke="currentColor" stroke-width="0.85"/>
+  <line x1="12" y1="12" x2="9.2" y2="15.2" stroke="currentColor" stroke-width="0.85"/>
+  <line x1="12" y1="12" x2="14.8" y2="15.2" stroke="currentColor" stroke-width="0.85"/>
+
+  <!-- Top & Bottom Anchor Nodes -->
+  <circle cx="12" cy="2.3" r="1.4" fill="currentColor"/>
+  <circle cx="12" cy="21.7" r="1.4" fill="currentColor"/>
+
+  <!-- Inner Dependency Graph Nodes -->
+  <circle cx="12" cy="12" r="1.45" fill="currentColor"/>
+  <circle cx="12" cy="7.2" r="1.1" fill="currentColor"/>
+  <circle cx="8.2" cy="8.8" r="1.1" fill="currentColor"/>
+  <circle cx="15.8" cy="8.8" r="1.1" fill="currentColor"/>
+  <circle cx="7.2" cy="12.2" r="1.1" fill="currentColor"/>
+  <circle cx="16.8" cy="12.2" r="1.1" fill="currentColor"/>
+  <circle cx="9.2" cy="15.2" r="1.1" fill="currentColor"/>
+  <circle cx="14.8" cy="15.2" r="1.1" fill="currentColor"/>
+</svg>
