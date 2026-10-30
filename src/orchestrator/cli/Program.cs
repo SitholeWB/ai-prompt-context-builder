@@ -29,7 +29,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 1.1.0");
+            Console.WriteLine("aipromptcontext (aicontext) version 2.0.1");
             return 0;
         }
 
@@ -217,6 +217,14 @@ public class Program
                 case "--git-file":
                     config.GitScope = GitScopeMode.SingleFile;
                     break;
+                case "--git-branch" or "--git-pr":
+                    config.GitScope = GitScopeMode.CompareBranch;
+                    config.GitCompareTarget = NextVal();
+                    break;
+                case "--git-commits":
+                    config.GitScope = GitScopeMode.LastCommits;
+                    if (int.TryParse(NextVal(), out int commitCnt)) config.GitCommitCount = commitCnt;
+                    break;
                 case "--include-git-diff":
                     config.IncludeGitDiff = ParseBool(NextVal());
                     break;
@@ -226,7 +234,7 @@ public class Program
             }
         }
 
-        bool isWorkspaceGitMode = config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly;
+        bool isWorkspaceGitMode = config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly or GitScopeMode.CompareBranch or GitScopeMode.LastCommits;
         if (string.IsNullOrWhiteSpace(config.RootPath) && !isWorkspaceGitMode)
         {
             if (format == "json")
@@ -344,7 +352,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 1.1.0
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 2.0.1
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
@@ -359,6 +367,8 @@ Target Scope (one required):
   --git, --git-all               Analyze all Git-modified/added/untracked files + their dependency trees
   --git-staged, --staged         Analyze staged Git changes ONLY + their dependency trees
   --git-unstaged                 Analyze unstaged working tree Git changes ONLY + their dependency trees
+  --git-branch, --git-pr <ref>   Compare current branch against <ref> (e.g. main) + dependency trees
+  --git-commits <N>              Analyze files modified in the last <N> commits + dependency trees
   --git-file                     Include Git unified diff for the single --file target
 
 Git Options:

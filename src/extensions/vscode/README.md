@@ -35,16 +35,18 @@ Generate clean, dependency-aware AI prompts directly inside your editor with sin
 
 ### How to Use
 
-#### 1. Right-Click in the File Explorer or Source Control Panel (Interactive Popup Flow)
-* Right-click any source file in the Explorer tree (`.cs`, `.ts`, `.tsx`, `.razor`, `.py`, `.rs`, `.kt`, `.php`, `.dart`, `.cpp`, `.java`, `.go`, etc.) and click **Generate AI Prompt & Context...** (or **Generate AI Prompt from Git Changes...**).
+#### 1. Single Right-Click or Activity Bar Sidebar Icon (Interactive Popup Flow)
+* Right-click any source file in the Explorer or Editor (or open the **AI Prompt & Context Builder** icon in the left Activity Bar) and click **Generate AI Prompt & Context**.
 * **Popup 1 — Select Context & Git Scope**:
   * **Dependencies Only (No Git Changes)** — Classic mode: trace the full dependency tree of the selected file without Git diffs.
   * **All Git Changes (Staged + Unstaged) + Dependencies Tree** — Discover all modified, added, and untracked source files in your workspace and trace their combined dependency trees.
   * **Staged Git Changes ONLY + Dependencies Tree** — Discover only staged (`git add`) files and trace their dependency trees.
   * **Unstaged Git Changes ONLY + Dependencies Tree** — Discover only unstaged working tree modifications and trace their dependency trees.
+  * **Compare Branch / Pull Request + Dependencies Tree...** — Pick any local or remote branch (`main`, `develop`, `origin/main`, etc.) to compare against `HEAD` (`base...HEAD`) and trace the dependency trees of all PR-modified files.
+  * **Last X Commits + Dependencies Tree...** — Select the last `1`, `2`, `3`, `5`, `10`, or custom `N` commits (`HEAD~N..HEAD`) and trace the dependency trees of all touched files.
   * **Single File Git Changes + Dependencies Tree** — Trace the dependency tree of the selected file and include its Git diff.
 * **Popup 2 — Select Output Content** *(when a Git scope is selected)*:
-  * **Git Diff + Full Dependencies Tree (Recommended)** — Embeds the unified (`+` / `-`) Git diff patch at the top of the Markdown file **plus** the complete source code of all modified files and their dependency trees.
+  * **Git Diff + Full Dependencies Tree (Recommended)** — Embeds the unified (`+` / `-`) Git diff patch (and commit log summary for PRs/commits) at the top of the Markdown file **plus** the complete source code of all modified files and their dependency trees.
   * **Dependencies Tree Only (No Diff Text)** — Includes the complete source code of the Git-modified files and their dependency trees without the raw diff block.
 * **Popup 3 — Choose Export Mode**:
   * **Export with Defaults** (instant one-click generation) or **Custom Options...** (configure token budget, comment stripping, depth, output destination & custom prompt task).

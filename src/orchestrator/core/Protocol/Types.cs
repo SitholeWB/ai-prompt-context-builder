@@ -163,7 +163,9 @@ public enum GitScopeMode
     AllChanges,
     StagedOnly,
     UnstagedOnly,
-    SingleFile
+    SingleFile,
+    CompareBranch,
+    LastCommits
 }
 
 public enum ExclusionReason
@@ -293,6 +295,8 @@ public class UserConfiguration
     public RequestedAnalysisLevel AnalysisLevel { get; set; } = RequestedAnalysisLevel.Best;
     public GitScopeMode GitScope { get; set; } = GitScopeMode.None;
     public bool IncludeGitDiff { get; set; } = true;
+    public string? GitCompareTarget { get; set; }
+    public int? GitCommitCount { get; set; }
 
     public int? MaxTokens { get; set; }
     public int? MaxDepth { get; set; }

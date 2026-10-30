@@ -79,11 +79,16 @@ public static class GitDiffService
         return true;
     }
 
-    public static GitChangesResult ResolveGitChanges(string workspaceOrFilePath, GitScopeMode scope, string? targetFilePath = null)
+    public static GitChangesResult ResolveGitChanges(
+        string workspaceOrFilePath,
+        GitScopeMode scope,
+        string? targetFilePath = null,
+        string? compareTarget = null,
+        int? commitCount = null)
     {
         var result = new GitChangesResult
         {
-            ScopeDescription = GetScopeDescription(scope)
+            ScopeDescription = GetScopeDescription(scope, compareTarget, commitCount)
         };
 
         var gitRoot = FindGitRoot(targetFilePath ?? workspaceOrFilePath);
@@ -178,6 +183,31 @@ public static class GitDiffService
                 modifiedRelPaths.Add(u);
             }
         }
+        else if (scope == GitScopeMode.CompareBranch)
+        {
+            string baseBranch = !string.IsNullOrWhiteSpace(compareTarget) ? compareTarget.Trim() : "main";
+            var namesRes = RunGit(gitRoot, $"diff \"{baseBranch}...HEAD\" --name-only --diff-filter=ACMRTUXB");
+            if (namesRes.ExitCode != 0)
+            {
+                namesRes = RunGit(gitRoot, $"diff \"{baseBranch}..HEAD\" --name-only --diff-filter=ACMRTUXB");
+            }
+            AddLinesToSet(namesRes.StdOut, modifiedRelPaths);
+        }
+        else if (scope == GitScopeMode.LastCommits)
+        {
+            int count = Math.Max(1, commitCount ?? 1);
+            var namesRes = RunGit(gitRoot, $"diff HEAD~{count}..HEAD --name-only --diff-filter=ACMRTUXB");
+            if (namesRes.ExitCode != 0)
+            {
+                // Fallback when repository has fewer than N+1 commits (includes root commit)
+                var logNames = RunGit(gitRoot, $"log -n {count} --name-only --pretty=format:\"\" --diff-filter=ACMRTUXB");
+                AddLinesToSet(logNames.StdOut, modifiedRelPaths);
+            }
+            else
+            {
+                AddLinesToSet(namesRes.StdOut, modifiedRelPaths);
+            }
+        }
 
         var validRelPaths = new List<string>();
         foreach (var rel in modifiedRelPaths.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
@@ -236,6 +266,46 @@ public static class GitDiffService
                         combinedDiff.AppendLine(unstagedDiff.StdOut.TrimEnd());
                 }
             }
+            else if (scope == GitScopeMode.CompareBranch)
+            {
+                string baseBranch = !string.IsNullOrWhiteSpace(compareTarget) ? compareTarget.Trim() : "main";
+                var logRes = RunGit(gitRoot, $"log --oneline \"{baseBranch}..HEAD\"");
+                if (logRes.ExitCode == 0 && !string.IsNullOrWhiteSpace(logRes.StdOut))
+                {
+                    combinedDiff.AppendLine($"# Commits in branch compared to {baseBranch}:");
+                    foreach (var line in logRes.StdOut.TrimEnd().Split('\n'))
+                        combinedDiff.AppendLine($"#   {line.TrimEnd('\r')}");
+                    combinedDiff.AppendLine();
+                }
+
+                var diffRes = RunGit(gitRoot, $"diff \"{baseBranch}...HEAD\" -- {pathArgs}");
+                if (diffRes.ExitCode != 0)
+                {
+                    diffRes = RunGit(gitRoot, $"diff \"{baseBranch}..HEAD\" -- {pathArgs}");
+                }
+                if (!string.IsNullOrWhiteSpace(diffRes.StdOut))
+                    combinedDiff.AppendLine(diffRes.StdOut.TrimEnd());
+            }
+            else if (scope == GitScopeMode.LastCommits)
+            {
+                int count = Math.Max(1, commitCount ?? 1);
+                var logRes = RunGit(gitRoot, $"log -n {count} --oneline");
+                if (logRes.ExitCode == 0 && !string.IsNullOrWhiteSpace(logRes.StdOut))
+                {
+                    combinedDiff.AppendLine($"# Last {count} commit(s):");
+                    foreach (var line in logRes.StdOut.TrimEnd().Split('\n'))
+                        combinedDiff.AppendLine($"#   {line.TrimEnd('\r')}");
+                    combinedDiff.AppendLine();
+                }
+
+                var diffRes = RunGit(gitRoot, $"diff HEAD~{count}..HEAD -- {pathArgs}");
+                if (diffRes.ExitCode != 0)
+                {
+                    diffRes = RunGit(gitRoot, $"log -n {count} -p --pretty=format:\"\" -- {pathArgs}");
+                }
+                if (!string.IsNullOrWhiteSpace(diffRes.StdOut))
+                    combinedDiff.AppendLine(diffRes.StdOut.TrimEnd());
+            }
         }
 
         // For untracked files in AllChanges, synthesize a clean unified diff header
@@ -249,12 +319,14 @@ public static class GitDiffService
         return result;
     }
 
-    public static string GetScopeDescription(GitScopeMode scope) => scope switch
+    public static string GetScopeDescription(GitScopeMode scope, string? compareTarget = null, int? commitCount = null) => scope switch
     {
         GitScopeMode.AllChanges => "All Git Changes (Staged + Unstaged + Untracked)",
         GitScopeMode.StagedOnly => "Staged Git Changes Only",
         GitScopeMode.UnstagedOnly => "Unstaged Working Tree Changes Only",
         GitScopeMode.SingleFile => "Single File Git Changes",
+        GitScopeMode.CompareBranch => $"Pull Request / Branch Diff vs '{(!string.IsNullOrWhiteSpace(compareTarget) ? compareTarget : "main")}'",
+        GitScopeMode.LastCommits => $"Last {Math.Max(1, commitCount ?? 1)} Commit(s) (HEAD~{Math.Max(1, commitCount ?? 1)}..HEAD)",
         _ => "None"
     };
 

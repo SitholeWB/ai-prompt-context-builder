@@ -1,16 +1,40 @@
 import * as vscode from 'vscode';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+
+type GitScopeType = 'none' | 'all' | 'staged' | 'unstaged' | 'file' | 'branch' | 'commits';
 
 let lastGeneratedPath: string | null = null;
 let outputChannel: vscode.OutputChannel;
 let extContext: vscode.ExtensionContext;
+let historyTreeProvider: HistoryTreeProvider;
+
+function resolveTargetFilePath(uri?: vscode.Uri): string | undefined {
+  const candidate = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
+  if (!candidate) return undefined;
+  try {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return vscode.window.activeTextEditor?.document.uri.fsPath;
+    }
+  } catch {
+    // ignore stat errors
+  }
+  return candidate;
+}
 
 export function activate(context: vscode.ExtensionContext) {
   extContext = context;
   outputChannel = vscode.window.createOutputChannel('AI Context & Prompt Builder');
   context.subscriptions.push(outputChannel);
+
+  // Register Activity Bar Sidebar Views
+  const actionsProvider = new ActionsTreeProvider();
+  historyTreeProvider = new HistoryTreeProvider(context);
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider('aiPromptContextBuilder.actionsView', actionsProvider),
+    vscode.window.registerTreeDataProvider('aiPromptContextBuilder.historyView', historyTreeProvider)
+  );
 
   const registerCmd = (name: string, handler: (...args: any[]) => any) => {
     context.subscriptions.push(vscode.commands.registerCommand(`aiPromptContextBuilder.${name}`, handler));
@@ -18,16 +42,33 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand(`aiContextBuilder.${name}`, handler));
   };
 
-  // 1. Generate from Current File (or Interactive Scope Popup)
+  // 1. Single Right-Click & Interactive Popup Entry Point
   registerCmd('generateFromFile', async (uri?: vscode.Uri) => {
-    const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
+    const filePath = resolveTargetFilePath(uri);
     await showScopeAndExportPopups(filePath, false);
   });
 
-  // 1b. Generate from Git Changes (Direct Git Popup)
+  // 1b. Generate from Git Changes (Opens Interactive Popup with Git options first)
   registerCmd('generateFromGit', async (uri?: vscode.Uri) => {
-    const filePath = uri?.fsPath || vscode.window.activeTextEditor?.document.uri.fsPath;
+    const filePath = resolveTargetFilePath(uri);
     await showScopeAndExportPopups(filePath, true);
+  });
+
+  // 1c. Sidebar Quick-Scope Trigger (Opens Popup 2 & Popup 3 for a chosen Git scope)
+  registerCmd('generateWithScopePopup', async (preselectedScope: GitScopeType) => {
+    const filePath = resolveTargetFilePath();
+    await showScopeAndExportPopups(filePath, true, preselectedScope);
+  });
+
+  // 1d. Open a specific file from the Sidebar History View
+  registerCmd('openHistoryFile', async (targetPath: string) => {
+    if (targetPath && fs.existsSync(targetPath)) {
+      const doc = await vscode.workspace.openTextDocument(targetPath);
+      await vscode.window.showTextDocument(doc);
+    } else {
+      vscode.window.showWarningMessage(`File no longer exists on disk: ${targetPath}`);
+      historyTreeProvider.refresh();
+    }
   });
 
   // 2. Generate from Symbol at Cursor
@@ -269,15 +310,155 @@ function resolveCommand(extraArgs: string[]): CommandSpec {
   };
 }
 
-async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: boolean) {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+function getGitBranches(cwd?: string): string[] {
+  if (!cwd) return ['main', 'master', 'develop'];
+  try {
+    const out = execSync('git branch -a --format="%(refname:short)"', {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const raw = out
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter((s) => s && !s.includes('HEAD') && s !== 'origin');
+    const priority = ['main', 'master', 'develop', 'origin/main', 'origin/master', 'origin/develop'];
+    const sorted = [
+      ...priority.filter((p) => raw.includes(p)),
+      ...raw.filter((r) => !priority.includes(r)),
+    ];
+    return sorted.length > 0 ? Array.from(new Set(sorted)) : ['main', 'master', 'develop'];
+  } catch {
+    return ['main', 'master', 'develop'];
+  }
+}
+
+function getRecentCommitsPreview(cwd?: string, count = 10): string[] {
+  if (!cwd) return [];
+  try {
+    const out = execSync(`git log -n ${count} --oneline`, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return out
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function promptForTargetBranch(workspaceFolder?: string): Promise<string | undefined> {
+  const branches = getGitBranches(workspaceFolder);
+  const items: vscode.QuickPickItem[] = branches.map((b) => ({
+    label: `$(git-branch) ${b}`,
+    description: b.startsWith('origin/') ? 'Remote Branch' : 'Local Branch',
+    detail: `Compare current HEAD against '${b}' (${b}...HEAD) + resolve all modified files' dependency trees`,
+  }));
+  items.push({
+    label: '$(edit) Custom Branch, Tag, or Commit SHA...',
+    description: 'Enter manually',
+    detail: 'Type any Git branch name, tag, or commit reference',
+  });
+
+  const pick = await vscode.window.showQuickPick(items, {
+    title: 'Compare Branch / Pull Request Scope',
+    placeHolder: 'Select the base branch to compare against (e.g. main, develop, origin/main)',
+  });
+  if (!pick) return undefined;
+
+  if (pick.label.includes('Custom Branch')) {
+    const custom = await vscode.window.showInputBox({
+      prompt: 'Enter target branch name, tag, or commit SHA to compare against',
+      placeHolder: 'e.g. main, origin/main, v1.0.0, or a1b2c3d',
+    });
+    return custom?.trim() || undefined;
+  }
+
+  return pick.label.replace('$(git-branch) ', '').trim();
+}
+
+async function promptForCommitCount(workspaceFolder?: string): Promise<number | undefined> {
+  const recentCommits = getRecentCommitsPreview(workspaceFolder, 10);
+  const latest1 = recentCommits[0] ? `Latest: ${recentCommits[0]}` : 'HEAD~1..HEAD';
+  const latest2 = recentCommits.slice(0, 2).join(' | ') || 'HEAD~2..HEAD';
+  const latest3 = recentCommits.slice(0, 3).join(' | ') || 'HEAD~3..HEAD';
+  const latest5 = recentCommits.slice(0, 5).join(' | ') || 'HEAD~5..HEAD';
+
+  const items = [
+    {
+      label: '$(git-commit) Last 1 Commit',
+      description: 'HEAD~1..HEAD',
+      detail: latest1,
+      count: 1,
+    },
+    {
+      label: '$(git-commit) Last 2 Commits',
+      description: 'HEAD~2..HEAD',
+      detail: latest2,
+      count: 2,
+    },
+    {
+      label: '$(git-commit) Last 3 Commits',
+      description: 'HEAD~3..HEAD',
+      detail: latest3,
+      count: 3,
+    },
+    {
+      label: '$(git-commit) Last 5 Commits',
+      description: 'HEAD~5..HEAD',
+      detail: latest5,
+      count: 5,
+    },
+    {
+      label: '$(git-commit) Last 10 Commits',
+      description: 'HEAD~10..HEAD',
+      detail: 'All files modified in the last 10 commits + their dependency trees',
+      count: 10,
+    },
+    {
+      label: '$(edit) Custom Number of Commits...',
+      description: 'Enter integer N',
+      detail: 'Analyze files modified across the last N commits (HEAD~N..HEAD)',
+      count: -1,
+    },
+  ];
+
+  const pick = await vscode.window.showQuickPick(items, {
+    title: 'Last X Commits + Dependencies Tree',
+    placeHolder: 'Select how many recent commits to include in the AI context',
+  });
+  if (!pick) return undefined;
+
+  if (pick.count === -1) {
+    const val = await vscode.window.showInputBox({
+      prompt: 'Enter number of recent commits to analyze (e.g. 4)',
+      placeHolder: '4',
+    });
+    const parsed = val ? parseInt(val.trim(), 10) : NaN;
+    return !isNaN(parsed) && parsed > 0 ? parsed : undefined;
+  }
+
+  return pick.count;
+}
+
+async function showScopeAndExportPopups(
+  filePath: string | undefined,
+  gitFirst: boolean,
+  preselectedScope?: GitScopeType
+) {
+  const workspaceFolder =
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
+    (filePath ? path.dirname(filePath) : undefined);
   if (!filePath && !workspaceFolder) {
     vscode.window.showErrorMessage('Please open a file or workspace folder to generate AI context.');
     return;
   }
 
   interface ScopeQuickPickItem extends vscode.QuickPickItem {
-    gitScope: 'none' | 'all' | 'staged' | 'unstaged' | 'file';
+    gitScope: GitScopeType;
   }
 
   const fileItem: ScopeQuickPickItem | undefined = filePath
@@ -301,7 +482,7 @@ async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: 
   const gitItems: ScopeQuickPickItem[] = [
     {
       label: '$(git-merge) All Git Changes (Staged + Unstaged) + Dependencies Tree',
-      description: 'Workspace Git Scope',
+      description: 'Working Tree Scope',
       detail: 'Discover all modified, added & untracked source files and trace their combined dependency trees',
       gitScope: 'all',
     },
@@ -317,6 +498,18 @@ async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: 
       detail: 'Discover only unstaged working tree modifications and trace their combined dependency trees',
       gitScope: 'unstaged',
     },
+    {
+      label: '$(git-pull-request) Compare Branch / Pull Request + Dependencies Tree...',
+      description: 'Branch / PR Diff',
+      detail: 'Compare current branch against main/develop/origin and trace dependency trees of all PR files',
+      gitScope: 'branch',
+    },
+    {
+      label: '$(git-commit) Last X Commits + Dependencies Tree...',
+      description: 'Recent Commits (HEAD~N)',
+      detail: 'Select last 1, 2, 3, 5, or N commits and trace dependency trees of all touched files',
+      gitScope: 'commits',
+    },
   ];
 
   const scopeItems: ScopeQuickPickItem[] = [];
@@ -330,19 +523,47 @@ async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: 
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
   }
 
-  // Popup 1: Select Scope
-  const scopePick = await vscode.window.showQuickPick(scopeItems, {
-    title: filePath
-      ? `AI Prompt & Context: ${path.basename(filePath)}`
-      : 'AI Prompt & Context: Git Workspace Changes',
-    placeHolder: 'Step 1: Select Context Scope (Dependencies Only vs Git Changes + Dependencies Tree)',
-  });
-  if (!scopePick) return;
+  let chosenScope = preselectedScope;
+  let chosenDescription = preselectedScope || '';
+
+  if (chosenScope && (chosenScope === 'none' || chosenScope === 'file') && !filePath) {
+    vscode.window.showErrorMessage('Please open a source file in the editor first, or choose a Workspace Git Scope.');
+    return;
+  }
+
+  // Popup 1: Select Scope (unless preselected from a specific sidebar shortcut)
+  if (!chosenScope) {
+    const scopePick = await vscode.window.showQuickPick(scopeItems, {
+      title: filePath
+        ? `AI Prompt & Context: ${path.basename(filePath)}`
+        : 'AI Prompt & Context: Git & Workspace Scopes',
+      placeHolder: 'Step 1: Select Context Scope (File Dependencies, Git Working Tree, Branch/PR, or Last X Commits)',
+    });
+    if (!scopePick) return;
+    chosenScope = scopePick.gitScope;
+    chosenDescription = scopePick.description || scopePick.label;
+  } else {
+    const matched = scopeItems.find((i) => i.gitScope === chosenScope);
+    chosenDescription = matched?.description || chosenScope;
+  }
+
+  let compareBranch: string | undefined;
+  let commitCount: number | undefined;
+
+  if (chosenScope === 'branch') {
+    compareBranch = await promptForTargetBranch(workspaceFolder);
+    if (!compareBranch) return;
+    chosenDescription = `Compare vs ${compareBranch}`;
+  } else if (chosenScope === 'commits') {
+    commitCount = await promptForCommitCount(workspaceFolder);
+    if (!commitCount) return;
+    chosenDescription = `Last ${commitCount} Commit(s)`;
+  }
 
   let includeGitDiff = true;
 
   // Popup 2: Select Output Content (only when a Git scope is chosen)
-  if (scopePick.gitScope !== 'none') {
+  if (chosenScope !== 'none') {
     const diffPick = await vscode.window.showQuickPick(
       [
         {
@@ -359,7 +580,7 @@ async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: 
         },
       ],
       {
-        title: `Git Context Content (${scopePick.description})`,
+        title: `Git Context Content (${chosenDescription})`,
         placeHolder: 'Step 2: Choose whether to include the unified (+ / -) Git diff block in the Markdown',
       }
     );
@@ -389,9 +610,11 @@ async function showScopeAndExportPopups(filePath: string | undefined, gitFirst: 
   if (!modePick) return;
 
   const baseOptions: RunOptions = {
-    gitScope: scopePick.gitScope,
+    gitScope: chosenScope,
     includeGitDiff,
     workspacePath: workspaceFolder,
+    compareBranch,
+    commitCount,
   };
 
   const targetPath = filePath || workspaceFolder || '';
@@ -508,9 +731,11 @@ interface RunOptions {
   copyToClipboard?: boolean;
   saveToFile?: boolean;
   task?: string;
-  gitScope?: 'none' | 'all' | 'staged' | 'unstaged' | 'file';
+  gitScope?: GitScopeType;
   includeGitDiff?: boolean;
   workspacePath?: string;
+  compareBranch?: string;
+  commitCount?: number;
 }
 
 async function runGeneration(filePath: string, options: RunOptions) {
@@ -541,6 +766,12 @@ async function runGeneration(filePath: string, options: RunOptions) {
         if (options.workspacePath) args.push('--workspace', options.workspacePath);
       } else if (options.gitScope === 'unstaged') {
         args.push('--git-unstaged');
+        if (options.workspacePath) args.push('--workspace', options.workspacePath);
+      } else if (options.gitScope === 'branch') {
+        args.push('--git-branch', options.compareBranch || 'main');
+        if (options.workspacePath) args.push('--workspace', options.workspacePath);
+      } else if (options.gitScope === 'commits') {
+        args.push('--git-commits', (options.commitCount || 1).toString());
         if (options.workspacePath) args.push('--workspace', options.workspacePath);
       } else if (options.gitScope === 'file') {
         args.push('--file', filePath, '--git-file');
@@ -605,6 +836,9 @@ async function runGeneration(filePath: string, options: RunOptions) {
               const res = JSON.parse(stdout);
               if (res.success) {
                 lastGeneratedPath = res.outputPath;
+                if (res.outputPath && historyTreeProvider) {
+                  historyTreeProvider.addGeneratedFile(res.outputPath, res.filesIncluded, res.finalEstimatedTokens);
+                }
                 outputChannel.appendLine(`Generated: ${res.outputPath} (${res.filesIncluded} files, ~${res.finalEstimatedTokens} tokens)`);
                 handleSuccess(res);
                 resolve();
@@ -733,3 +967,207 @@ async function handleMissingRuntime(failedCommand: string, error?: Error): Promi
 }
 
 export function deactivate() {}
+
+class ActionTreeItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    description: string,
+    tooltip: string,
+    iconName: string,
+    commandId: string,
+    args: any[] = []
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.description = description;
+    this.tooltip = tooltip;
+    this.iconPath = new vscode.ThemeIcon(iconName);
+    this.command = {
+      command: commandId,
+      title: label,
+      arguments: args,
+    };
+  }
+}
+
+class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
+  getTreeItem(element: ActionTreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(): vscode.ProviderResult<ActionTreeItem[]> {
+    return [
+      new ActionTreeItem(
+        'Generate AI Prompt & Context...',
+        'Interactive Popup',
+        'Open the full interactive popup selector (Dependencies Only vs Git Scopes, Diff Options & Export Mode)',
+        'sparkle',
+        'aiPromptContextBuilder.generateFromFile'
+      ),
+      new ActionTreeItem(
+        'All Git Changes + Dependencies',
+        'Staged + Unstaged',
+        'Select All Git Changes and open popup for Diff & Export options',
+        'git-merge',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['all']
+      ),
+      new ActionTreeItem(
+        'Staged Git Changes ONLY',
+        'git diff --cached',
+        'Select Staged Git Changes ONLY and open popup for Diff & Export options',
+        'diff-added',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['staged']
+      ),
+      new ActionTreeItem(
+        'Unstaged Git Changes ONLY',
+        'git diff',
+        'Select Unstaged Git Changes ONLY and open popup for Diff & Export options',
+        'diff-modified',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['unstaged']
+      ),
+      new ActionTreeItem(
+        'Compare Branch / Pull Request...',
+        'PR / Branch Diff',
+        'Compare current branch against main/develop/origin and resolve all PR files + dependency trees',
+        'git-pull-request',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['branch']
+      ),
+      new ActionTreeItem(
+        'Last X Commits + Dependencies...',
+        'Recent Commits',
+        'Select last 1, 2, 3, 5, or N commits and resolve all modified files + dependency trees',
+        'git-commit',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['commits']
+      ),
+      new ActionTreeItem(
+        'Active File: Dependencies Only',
+        'No Git Diff',
+        'Trace dependency tree of the active editor file (opens Export Mode popup)',
+        'file-code',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['none']
+      ),
+      new ActionTreeItem(
+        'Active File: Git Diff + Dependencies',
+        'Single File',
+        'Trace dependency tree of the active editor file and include its Git diff',
+        'diff',
+        'aiPromptContextBuilder.generateWithScopePopup',
+        ['file']
+      ),
+      new ActionTreeItem(
+        'Symbol at Cursor + Dependencies',
+        'Focused Root',
+        'Generate context rooted at the symbol under the cursor',
+        'symbol-method',
+        'aiPromptContextBuilder.generateFromSymbol'
+      ),
+      new ActionTreeItem(
+        'Check Language Workers',
+        'Diagnostics',
+        'Verify compiler & analyzer status across .NET, TypeScript, Python, Rust, Go, Java, C++, PHP, Dart & Kotlin',
+        'check-all',
+        'aiPromptContextBuilder.checkWorkers'
+      ),
+    ];
+  }
+}
+
+interface HistoryEntry {
+  filePath: string;
+  filesIncluded: number;
+  tokens: number;
+  timestamp: number;
+}
+
+class HistoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined | void>();
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private entries: HistoryEntry[] = [];
+
+  constructor(private context: vscode.ExtensionContext) {
+    this.entries = this.context.workspaceState.get<HistoryEntry[]>('recentGeneratedPrompts', []);
+    this.discoverWorkspaceContextFiles();
+  }
+
+  private discoverWorkspaceContextFiles() {
+    const wsFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!wsFolder || !fs.existsSync(wsFolder)) return;
+    try {
+      const files = fs.readdirSync(wsFolder);
+      for (const f of files) {
+        if (f.endsWith('-context.md')) {
+          const full = path.join(wsFolder, f);
+          if (!this.entries.some((e) => e.filePath === full)) {
+            const stat = fs.statSync(full);
+            this.entries.push({
+              filePath: full,
+              filesIncluded: 0,
+              tokens: 0,
+              timestamp: stat.mtimeMs,
+            });
+          }
+        }
+      }
+      this.entries.sort((a, b) => b.timestamp - a.timestamp);
+    } catch {
+      // ignore read errors
+    }
+  }
+
+  addGeneratedFile(filePath: string, filesIncluded: number, tokens: number) {
+    this.entries = this.entries.filter((e) => e.filePath !== filePath);
+    this.entries.unshift({
+      filePath,
+      filesIncluded,
+      tokens,
+      timestamp: Date.now(),
+    });
+    if (this.entries.length > 15) {
+      this.entries = this.entries.slice(0, 15);
+    }
+    this.context.workspaceState.update('recentGeneratedPrompts', this.entries);
+    this._onDidChangeTreeData.fire();
+  }
+
+  refresh() {
+    this.entries = this.entries.filter((e) => fs.existsSync(e.filePath));
+    this.context.workspaceState.update('recentGeneratedPrompts', this.entries);
+    this._onDidChangeTreeData.fire();
+  }
+
+  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(): vscode.ProviderResult<vscode.TreeItem[]> {
+    const valid = this.entries.filter((e) => fs.existsSync(e.filePath));
+    if (valid.length === 0) {
+      const emptyItem = new vscode.TreeItem('No generated context files yet', vscode.TreeItemCollapsibleState.None);
+      emptyItem.description = 'Right-click a file or use actions above';
+      emptyItem.iconPath = new vscode.ThemeIcon('info');
+      return [emptyItem];
+    }
+
+    return valid.map((entry) => {
+      const fileName = path.basename(entry.filePath);
+      const item = new vscode.TreeItem(fileName, vscode.TreeItemCollapsibleState.None);
+      item.description =
+        entry.tokens > 0
+          ? `${entry.filesIncluded} files • ~${entry.tokens.toLocaleString()} tokens`
+          : 'Click to open';
+      item.tooltip = entry.filePath;
+      item.iconPath = new vscode.ThemeIcon('markdown');
+      item.command = {
+        command: 'aiPromptContextBuilder.openHistoryFile',
+        title: 'Open Generated Markdown',
+        arguments: [entry.filePath],
+      };
+      return item;
+    });
+  }
+}

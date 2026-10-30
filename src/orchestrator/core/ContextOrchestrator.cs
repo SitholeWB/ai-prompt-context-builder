@@ -78,7 +78,7 @@ public class ContextOrchestrator
         Action<int, string>? progressCallback = null,
         CancellationToken cancellationToken = default)
     {
-        if (config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly)
+        if (config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly or GitScopeMode.CompareBranch or GitScopeMode.LastCommits)
         {
             return await GenerateGitWorkspaceContextAsync(config, progressCallback, cancellationToken);
         }
@@ -348,13 +348,18 @@ public class ContextOrchestrator
         Action<int, string>? progressCallback = null,
         CancellationToken cancellationToken = default)
     {
-        progressCallback?.Invoke(10, $"Resolving Git changes ({GitDiffService.GetScopeDescription(config.GitScope)})");
+        progressCallback?.Invoke(10, $"Resolving Git changes ({GitDiffService.GetScopeDescription(config.GitScope, config.GitCompareTarget, config.GitCommitCount)})");
 
         string startPath = !string.IsNullOrWhiteSpace(config.WorkspacePath)
             ? config.WorkspacePath
             : (!string.IsNullOrWhiteSpace(config.RootPath) ? config.RootPath : Directory.GetCurrentDirectory());
 
-        var gitResult = GitDiffService.ResolveGitChanges(startPath, config.GitScope);
+        var gitResult = GitDiffService.ResolveGitChanges(
+            startPath,
+            config.GitScope,
+            null,
+            config.GitCompareTarget,
+            config.GitCommitCount);
         if (!gitResult.IsGitRepository)
         {
             return new OrchestrationResult
@@ -547,6 +552,8 @@ public class ContextOrchestrator
             {
                 GitScopeMode.StagedOnly => "git-staged-context.md",
                 GitScopeMode.UnstagedOnly => "git-unstaged-context.md",
+                GitScopeMode.CompareBranch => "git-pr-context.md",
+                GitScopeMode.LastCommits => "git-commits-context.md",
                 _ => "git-changes-context.md"
             };
             string outFilename = !string.IsNullOrEmpty(config.OutputPath)

@@ -67,6 +67,7 @@ public class Program
         await RunTestAsync("36. C / C++: Companion Header/Source & Include Hierarchy", TestCppOrchestration);
         await RunTestAsync("37. Git Changes + Dependencies Tree: AllChanges & StagedOnly Multi-Root Traversal", TestGitChangesMultiRootOrchestration);
         await RunTestAsync("38. Git Changes Options: Dependencies Tree Only (No Diff Text) & Single File Git Diff", TestGitChangesNoDiffAndSingleFile);
+        await RunTestAsync("39. Git Branch / Pull Request Comparison & Last X Commits + Dependencies Tree", TestGitBranchCompareAndLastCommits);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -865,6 +866,77 @@ public class Program
             Assert(singleFileRes.GeneratedMarkdown!.Contains("## Git Changes (Unified Diff)"), "SingleFile includes Git Changes Unified Diff");
             Assert(singleFileRes.GeneratedMarkdown.Contains("+console.log(greet('AI Context'));"), "SingleFile diff contains Main.ts change");
             Assert(singleFileRes.GeneratedMarkdown.Contains("`Util.ts`"), "SingleFile includes dependency Util.ts");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRepo, true); } catch { }
+        }
+    }
+
+    private static async Task TestGitBranchCompareAndLastCommits()
+    {
+        string tempRepo = Path.Combine(Path.GetTempPath(), "ai-ctx-git-pr-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRepo);
+        try
+        {
+            File.WriteAllText(Path.Combine(tempRepo, "CoreMath.ts"), "export function add(a: number, b: number) { return a + b; }\n");
+            File.WriteAllText(Path.Combine(tempRepo, "Calc.ts"), "import { add } from './CoreMath';\nexport function runCalc() { return add(1, 2); }\n");
+            File.WriteAllText(Path.Combine(tempRepo, "Logger.py"), "def log_info(msg):\n    print(msg)\n");
+            File.WriteAllText(Path.Combine(tempRepo, "Worker.py"), "from Logger import log_info\ndef work():\n    log_info('start')\n");
+
+            RunGitCmd(tempRepo, "init -b main");
+            RunGitCmd(tempRepo, "config user.email \"test@example.com\"");
+            RunGitCmd(tempRepo, "config user.name \"Test User\"");
+            RunGitCmd(tempRepo, "add .");
+            RunGitCmd(tempRepo, "commit -m \"Initial base on main\"");
+
+            // Create feature branch
+            RunGitCmd(tempRepo, "checkout -b feat/upgrade");
+
+            // Commit 1 on feature branch: modify Calc.ts
+            File.WriteAllText(Path.Combine(tempRepo, "Calc.ts"), "import { add } from './CoreMath';\nexport function runCalc() { return add(100, 200); }\n");
+            RunGitCmd(tempRepo, "add Calc.ts");
+            RunGitCmd(tempRepo, "commit -m \"feat: update Calc numbers\"");
+
+            // Commit 2 on feature branch: modify Worker.py
+            File.WriteAllText(Path.Combine(tempRepo, "Worker.py"), "from Logger import log_info\ndef work():\n    log_info('upgraded worker')\n");
+            RunGitCmd(tempRepo, "add Worker.py");
+            RunGitCmd(tempRepo, "commit -m \"feat: update Worker message\"");
+
+            var orchestrator = new ContextOrchestrator();
+
+            // 1. Test Last 1 Commit (HEAD~1..HEAD): should include Worker.py + its dependency Logger.py, and NOT Calc.ts
+            var last1Res = await orchestrator.GenerateContextAsync(new UserConfiguration
+            {
+                WorkspacePath = tempRepo,
+                GitScope = GitScopeMode.LastCommits,
+                GitCommitCount = 1,
+                IncludeGitDiff = true,
+                SaveToFile = false
+            });
+
+            Assert(last1Res.Success, $"Last 1 Commit orchestration succeeded: {last1Res.ErrorMessage}");
+            Assert(last1Res.GeneratedMarkdown!.Contains("`Worker.py` *(Modified)*"), "Last 1 commit includes Worker.py as modified");
+            Assert(last1Res.GeneratedMarkdown.Contains("`Logger.py`"), "Last 1 commit resolves dependency Logger.py");
+            Assert(!last1Res.GeneratedMarkdown.Contains("`Calc.ts`"), "Last 1 commit does not include older commit file Calc.ts");
+            Assert(last1Res.GeneratedMarkdown.Contains("feat: update Worker message"), "Commit log message included in unified diff header");
+
+            // 2. Test CompareBranch vs 'main': should include BOTH commits' files (Calc.ts + CoreMath.ts AND Worker.py + Logger.py)
+            var prRes = await orchestrator.GenerateContextAsync(new UserConfiguration
+            {
+                WorkspacePath = tempRepo,
+                GitScope = GitScopeMode.CompareBranch,
+                GitCompareTarget = "main",
+                IncludeGitDiff = true,
+                SaveToFile = false
+            });
+
+            Assert(prRes.Success, $"CompareBranch vs main succeeded: {prRes.ErrorMessage}");
+            Assert(prRes.GeneratedMarkdown!.Contains("`Calc.ts` *(Modified)*"), "PR diff includes Calc.ts as modified");
+            Assert(prRes.GeneratedMarkdown.Contains("`CoreMath.ts`"), "PR diff resolves dependency CoreMath.ts");
+            Assert(prRes.GeneratedMarkdown.Contains("`Worker.py` *(Modified)*"), "PR diff includes Worker.py as modified");
+            Assert(prRes.GeneratedMarkdown.Contains("`Logger.py`"), "PR diff resolves dependency Logger.py");
+            Assert(prRes.GeneratedMarkdown.Contains("feat: update Calc numbers"), "PR diff includes commit log summary");
         }
         finally
         {
