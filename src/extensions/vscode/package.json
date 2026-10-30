@@ -3,7 +3,7 @@
   "displayName": "AI Context Builder & Prompt Generator",
   "icon": "media/icon.png",
   "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -58,6 +58,7 @@
     "onView:aiPromptContextBuilder.historyView",
     "onCommand:aiPromptContextBuilder.generateFromFile",
     "onCommand:aiPromptContextBuilder.generateFromGit",
+    "onCommand:aiPromptContextBuilder.draftCommitMessage",
     "onCommand:aiPromptContextBuilder.generateFromSymbol",
     "onCommand:aiPromptContextBuilder.generateWithOptions",
     "onCommand:aiPromptContextBuilder.generateAndCopy",
@@ -104,6 +105,11 @@
       {
         "command": "aiPromptContextBuilder.generateFromGit",
         "title": "Generate AI Prompt from Git Changes + Dependencies Tree",
+        "category": "AI Context / Prompt"
+      },
+      {
+        "command": "aiPromptContextBuilder.draftCommitMessage",
+        "title": "Draft Git Commit Message (AST Rules / Built-in Model)",
         "category": "AI Context / Prompt"
       },
       {

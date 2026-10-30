@@ -14,6 +14,7 @@ using AiPromptContextBuilder.Core.Scoring;
 using AiPromptContextBuilder.Core.Security;
 using AiPromptContextBuilder.Core.Tokenizer;
 using AiPromptContextBuilder.Core.Workers;
+using AiPromptContextBuilder.Core.Workspace;
 using AiPromptContextBuilder.Workers.DotNet;
 
 namespace AiPromptContextBuilder.Tests;
@@ -68,6 +69,7 @@ public class Program
         await RunTestAsync("37. Git Changes + Dependencies Tree: AllChanges & StagedOnly Multi-Root Traversal", TestGitChangesMultiRootOrchestration);
         await RunTestAsync("38. Git Changes Options: Dependencies Tree Only (No Diff Text) & Single File Git Diff", TestGitChangesNoDiffAndSingleFile);
         await RunTestAsync("39. Git Branch / Pull Request Comparison & Last X Commits + Dependencies Tree", TestGitBranchCompareAndLastCommits);
+        RunTest("40. Deterministic AST + Diff Git Commit Message Drafter (No AI)", TestGitCommitDraftService);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -937,6 +939,44 @@ public class Program
             Assert(prRes.GeneratedMarkdown.Contains("`Worker.py` *(Modified)*"), "PR diff includes Worker.py as modified");
             Assert(prRes.GeneratedMarkdown.Contains("`Logger.py`"), "PR diff resolves dependency Logger.py");
             Assert(prRes.GeneratedMarkdown.Contains("feat: update Calc numbers"), "PR diff includes commit log summary");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRepo, true); } catch { }
+        }
+    }
+
+    private static void TestGitCommitDraftService()
+    {
+        string tempRepo = Path.Combine(Path.GetTempPath(), "ai-ctx-commit-draft-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, "billing"));
+        try
+        {
+            File.WriteAllText(Path.Combine(tempRepo, "billing", "InvoiceService.cs"), "public class InvoiceService {\n    public int CalculateTotal() => 10;\n}\n");
+
+            RunGitCmd(tempRepo, "init");
+            RunGitCmd(tempRepo, "config user.email \"test@example.com\"");
+            RunGitCmd(tempRepo, "config user.name \"Test User\"");
+            RunGitCmd(tempRepo, "add .");
+            RunGitCmd(tempRepo, "commit -m \"Initial commit\"");
+
+            // Add a new method RefundInvoice and a new file PaymentGateway.ts
+            File.WriteAllText(
+                Path.Combine(tempRepo, "billing", "InvoiceService.cs"),
+                "public class InvoiceService {\n    public int CalculateTotal() => 20;\n    public bool RefundInvoice(string id) => true;\n}\n");
+            File.WriteAllText(
+                Path.Combine(tempRepo, "billing", "PaymentGateway.ts"),
+                "export class PaymentGateway {\n    export function chargeCard() {}\n}\n");
+
+            var draft = GitCommitDraftService.DraftCommitMessage(tempRepo, GitScopeMode.AllChanges);
+
+            Assert(draft.Success, $"DraftCommitMessage succeeded: {draft.ErrorMessage}");
+            Assert(draft.CommitType == "feat", $"Expected commit type 'feat' but got '{draft.CommitType}'");
+            Assert(draft.Scope == "billing", $"Expected scope 'billing' but got '{draft.Scope}'");
+            Assert(draft.FullCommitMessage.Contains("feat(billing):"), "Subject has Conventional Commit prefix feat(billing):");
+            Assert(draft.FullCommitMessage.Contains("InvoiceService.cs"), "Body lists modified InvoiceService.cs");
+            Assert(draft.FullCommitMessage.Contains("RefundInvoice"), "Body extracts added symbol RefundInvoice from diff");
+            Assert(draft.FullCommitMessage.Contains("PaymentGateway.ts"), "Body lists untracked added file PaymentGateway.ts");
         }
         finally
         {

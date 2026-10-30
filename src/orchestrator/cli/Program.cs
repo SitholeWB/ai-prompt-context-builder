@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using AiPromptContextBuilder.Core;
 using AiPromptContextBuilder.Core.Protocol;
 using AiPromptContextBuilder.Core.Workers;
+using AiPromptContextBuilder.Core.Workspace;
 using AiPromptContextBuilder.Workers.DotNet;
 
 namespace AiPromptContextBuilder.Cli;
@@ -29,7 +30,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 2.0.2");
+            Console.WriteLine("aipromptcontext (aicontext) version 2.1.0");
             return 0;
         }
 
@@ -84,11 +85,8 @@ public class Program
         }
 
         string command = args[0];
-        int argIndex = 1;
-        if (command != "generate")
-        {
-            argIndex = 0;
-        }
+        bool isDraftCommit = command == "draft-commit";
+        int argIndex = (command == "generate" || command == "draft-commit") ? 1 : 0;
 
         var config = new UserConfiguration();
         string format = "text";
@@ -231,7 +229,46 @@ public class Program
                 case "--no-diff":
                     config.IncludeGitDiff = false;
                     break;
+                case "--draft-commit":
+                    isDraftCommit = true;
+                    break;
             }
+        }
+
+        if (isDraftCommit)
+        {
+            string startPath = !string.IsNullOrWhiteSpace(config.WorkspacePath)
+                ? config.WorkspacePath
+                : (!string.IsNullOrWhiteSpace(config.RootPath) ? config.RootPath : Directory.GetCurrentDirectory());
+
+            var draftRes = GitCommitDraftService.DraftCommitMessage(startPath, config.GitScope);
+            if (!draftRes.Success)
+            {
+                if (format == "json")
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        errorCode = draftRes.ErrorCode ?? "NoGitChanges",
+                        message = draftRes.ErrorMessage ?? "No uncommitted changes found."
+                    }, JsonOpts));
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Error [{draftRes.ErrorCode}]: {draftRes.ErrorMessage}");
+                }
+                return 1;
+            }
+
+            if (format == "json")
+            {
+                Console.WriteLine(JsonSerializer.Serialize(draftRes, JsonOpts));
+            }
+            else
+            {
+                Console.WriteLine(draftRes.FullCommitMessage);
+            }
+            return 0;
         }
 
         bool isWorkspaceGitMode = config.GitScope is GitScopeMode.AllChanges or GitScopeMode.StagedOnly or GitScopeMode.UnstagedOnly or GitScopeMode.CompareBranch or GitScopeMode.LastCommits;
@@ -352,13 +389,14 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 2.0.2
+        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 2.1.0
 Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
 
 Usage:
   aipromptcontext generate --file <path> [options]
   aipromptcontext generate --git [--workspace <path>] [options]
   aipromptcontext generate --git-staged [--workspace <path>] [options]
+  aipromptcontext draft-commit [--workspace <path>] [--staged | --git-unstaged | --git-all]
   aipromptcontext check-workers
   (or aicontext / aiprompt)
 

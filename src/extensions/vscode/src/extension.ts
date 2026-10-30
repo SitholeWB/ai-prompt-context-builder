@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import { spawn, execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as http from 'http';
 
-type GitScopeType = 'none' | 'all' | 'staged' | 'unstaged' | 'file' | 'branch' | 'commits';
+type GitScopeType = 'none' | 'all' | 'staged' | 'unstaged' | 'file' | 'branch' | 'commits' | 'draftCommit';
 
 let lastGeneratedPath: string | null = null;
 let outputChannel: vscode.OutputChannel;
@@ -52,6 +53,12 @@ export function activate(context: vscode.ExtensionContext) {
   registerCmd('generateFromGit', async (uri?: vscode.Uri) => {
     const filePath = resolveTargetFilePath(uri);
     await showScopeAndExportPopups(filePath, true);
+  });
+
+  // 1e. Draft Git Commit Message (AST Rules / VS Code Built-in LM / Local Ollama)
+  registerCmd('draftCommitMessage', async (uri?: vscode.Uri) => {
+    const filePath = resolveTargetFilePath(uri);
+    await promptAndDraftCommitMessage(filePath);
   });
 
   // 1c. Sidebar Quick-Scope Trigger (Opens Popup 2 & Popup 3 for a chosen Git scope)
@@ -510,6 +517,12 @@ async function showScopeAndExportPopups(
       detail: 'Select last 1, 2, 3, 5, or N commits and trace dependency trees of all touched files',
       gitScope: 'commits',
     },
+    {
+      label: '$(comment-discussion) Draft Git Commit Message (Uncommitted Changes)...',
+      description: 'AST Rules or Built-in Model',
+      detail: 'Draft a Conventional Commit message from uncommitted changes and auto-fill the Git commit box',
+      gitScope: 'draftCommit',
+    },
   ];
 
   const scopeItems: ScopeQuickPickItem[] = [];
@@ -550,7 +563,10 @@ async function showScopeAndExportPopups(
   let compareBranch: string | undefined;
   let commitCount: number | undefined;
 
-  if (chosenScope === 'branch') {
+  if (chosenScope === 'draftCommit') {
+    await promptAndDraftCommitMessage(filePath);
+    return;
+  } else if (chosenScope === 'branch') {
     compareBranch = await promptForTargetBranch(workspaceFolder);
     if (!compareBranch) return;
     chosenDescription = `Compare vs ${compareBranch}`;
@@ -1004,6 +1020,13 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         'aiPromptContextBuilder.generateFromFile'
       ),
       new ActionTreeItem(
+        'Draft Git Commit Message...',
+        'No AI / Built-in LM',
+        'Draft a Conventional Commit message from uncommitted changes (AST rules or VS Code built-in model) and fill the Git commit box',
+        'comment-discussion',
+        'aiPromptContextBuilder.draftCommitMessage'
+      ),
+      new ActionTreeItem(
         'All Git Changes + Dependencies',
         'Staged + Unstaged',
         'Select All Git Changes and open popup for Diff & Export options',
@@ -1170,4 +1193,301 @@ class HistoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
       return item;
     });
   }
+}
+
+async function promptAndDraftCommitMessage(filePath?: string) {
+  const workspaceFolder =
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
+    (filePath ? path.dirname(filePath) : undefined);
+
+  if (!workspaceFolder) {
+    vscode.window.showErrorMessage('Please open a workspace folder inside a Git repository.');
+    return;
+  }
+
+  // Popup 1: Select Uncommitted Changes Scope
+  const scopePick = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(check-all) Auto-Detect (Staged if any, else All Uncommitted)',
+        description: 'Recommended',
+        detail: 'Drafts commit message for staged files if you ran git add, otherwise all uncommitted changes',
+        flag: '',
+      },
+      {
+        label: '$(diff-added) Staged Changes ONLY',
+        description: 'git diff --cached',
+        detail: 'Draft commit message strictly for currently staged files',
+        flag: '--staged',
+      },
+      {
+        label: '$(git-merge) All Uncommitted Changes (Staged + Unstaged + Untracked)',
+        description: 'Full Working Tree',
+        detail: 'Draft commit message covering all modified, added, and untracked files',
+        flag: '--git-all',
+      },
+      {
+        label: '$(diff-modified) Unstaged Changes ONLY',
+        description: 'git diff',
+        detail: 'Draft commit message strictly for unstaged working tree modifications',
+        flag: '--git-unstaged',
+      },
+    ],
+    {
+      title: 'Draft Git Commit Message — Step 1/2: Select Scope',
+      placeHolder: 'Choose which uncommitted changes to summarize',
+    }
+  );
+  if (!scopePick) return;
+
+  // Popup 2: Select Drafting Engine (Deterministic AST vs VS Code Built-in LM vs Local Ollama)
+  const enginePick = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(zap) Instant AST & Diff Analyzer (No AI)',
+        description: '100% Deterministic & Offline (< 20ms)',
+        detail: 'Extracts added/modified classes, methods & functions from diff hunks into a Conventional Commit',
+        engine: 'ast' as const,
+      },
+      {
+        label: '$(sparkle) VS Code Built-in Language Model (vscode.lm) + AST',
+        description: 'Zero-Config Editor Model (with AST fallback)',
+        detail: 'Uses VS Code built-in vscode.lm API to polish the AST diff summary (falls back to AST if unavailable)',
+        engine: 'vscodelm' as const,
+      },
+      {
+        label: '$(hubot) Local Ollama Tiny LLM (localhost:11434) + AST',
+        description: 'Local CPU/GPU Model (with AST fallback)',
+        detail: 'Uses a local Ollama model on 127.0.0.1:11434 if running, otherwise falls back to AST rules',
+        engine: 'ollama' as const,
+      },
+    ],
+    {
+      title: 'Draft Git Commit Message — Step 2/2: Select Drafting Engine',
+      placeHolder: 'Choose Instant AST Rules (No AI) or Local/Built-in Language Model',
+    }
+  );
+  if (!enginePick) return;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Drafting Git Commit Message...',
+      cancellable: true,
+    },
+    async (progress, token) => {
+      progress.report({ message: 'Analyzing Git diff & AST symbols...' });
+
+      const args = ['draft-commit', '--workspace', workspaceFolder, '--format', 'json'];
+      if (scopePick.flag) {
+        args.push(scopePick.flag);
+      }
+
+      const spec = resolveCommand(args);
+      outputChannel.appendLine(`[DraftCommit] ${spec.command} ${spec.args.join(' ')}`);
+
+      const draftJson = await new Promise<any>((resolve, reject) => {
+        const proc = spawn(spec.command, spec.args, spec.options);
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', (d) => { stdout += d.toString(); });
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.on('error', async (err) => {
+          await handleMissingRuntime(spec.command, err);
+          reject(err);
+        });
+        proc.on('close', () => {
+          try {
+            resolve(JSON.parse(stdout));
+          } catch (e) {
+            reject(new Error(stderr || stdout || 'Failed to parse commit draft output.'));
+          }
+        });
+      });
+
+      if (!draftJson || !draftJson.success) {
+        vscode.window.showWarningMessage(draftJson?.message || 'No uncommitted Git changes found to draft a commit message.');
+        return;
+      }
+
+      let finalMessage: string = draftJson.fullCommitMessage;
+      let engineUsed = 'AST + Diff Rules (No AI)';
+
+      if (enginePick.engine === 'vscodelm') {
+        progress.report({ message: 'Polishing commit message via VS Code built-in model (vscode.lm)...' });
+        const lmRefined = await tryRefineWithVsCodeLm(draftJson, token);
+        if (lmRefined) {
+          finalMessage = lmRefined;
+          engineUsed = 'VS Code Built-in Model (vscode.lm)';
+        } else {
+          outputChannel.appendLine('[DraftCommit] vscode.lm not available or returned empty; using deterministic AST draft.');
+        }
+      } else if (enginePick.engine === 'ollama') {
+        progress.report({ message: 'Checking local Ollama model (127.0.0.1:11434)...' });
+        const ollamaRefined = await tryRefineWithLocalOllama(draftJson);
+        if (ollamaRefined) {
+          finalMessage = ollamaRefined;
+          engineUsed = 'Local Ollama LLM';
+        } else {
+          outputChannel.appendLine('[DraftCommit] Local Ollama not running on 127.0.0.1:11434; using deterministic AST draft.');
+        }
+      }
+
+      // 1. Populate VS Code Source Control Commit Input Box if available
+      const filledScm = await setVsCodeGitCommitInputBox(finalMessage);
+
+      // 2. Always copy to clipboard for immediate Ctrl+V convenience
+      await vscode.env.clipboard.writeText(finalMessage);
+
+      const statusNote = filledScm
+        ? `Commit message drafted via ${engineUsed}, filled into Source Control box & copied to clipboard!`
+        : `Commit message drafted via ${engineUsed} & copied to clipboard!`;
+
+      const action = await vscode.window.showInformationMessage(
+        statusNote,
+        'Open Source Control',
+        'Preview / Edit in Editor'
+      );
+
+      if (action === 'Open Source Control') {
+        await vscode.commands.executeCommand('workbench.view.scm');
+      } else if (action === 'Preview / Edit in Editor') {
+        const doc = await vscode.workspace.openTextDocument({
+          content: finalMessage,
+          language: 'git-commit',
+        });
+        await vscode.window.showTextDocument(doc);
+      }
+    }
+  );
+}
+
+async function setVsCodeGitCommitInputBox(message: string): Promise<boolean> {
+  try {
+    const gitExt = vscode.extensions.getExtension('vscode.git');
+    if (!gitExt) return false;
+    const gitApi = gitExt.isActive ? gitExt.exports.getAPI(1) : (await gitExt.activate()).getAPI(1);
+    if (gitApi && gitApi.repositories && gitApi.repositories.length > 0) {
+      gitApi.repositories[0].inputBox.value = message;
+      return true;
+    }
+  } catch {
+    // ignore if git extension is unavailable
+  }
+  return false;
+}
+
+async function tryRefineWithVsCodeLm(draftJson: any, token: vscode.CancellationToken): Promise<string | undefined> {
+  try {
+    const lmAny = (vscode as any).lm;
+    const ChatMessage = (vscode as any).LanguageModelChatMessage;
+    if (!lmAny || typeof lmAny.selectChatModels !== 'function' || !ChatMessage) {
+      return undefined;
+    }
+
+    const models = await lmAny.selectChatModels({});
+    if (!models || models.length === 0) {
+      return undefined;
+    }
+
+    const model = models[0];
+    const prompt = buildCommitRefinePrompt(draftJson);
+    const messages = [ChatMessage.User(prompt)];
+    const response = await model.sendRequest(messages, {}, token);
+
+    let text = '';
+    for await (const chunk of response.text) {
+      text += chunk;
+    }
+    const cleaned = cleanCodeFences(text);
+    return cleaned.length > 10 ? cleaned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function tryRefineWithLocalOllama(draftJson: any): Promise<string | undefined> {
+  try {
+    const tagsJson: any = await httpGetJson('http://127.0.0.1:11434/api/tags', 1500);
+    const models: any[] = tagsJson?.models || [];
+    if (models.length === 0) return undefined;
+
+    const modelName = models[0].name;
+    const prompt = buildCommitRefinePrompt(draftJson);
+    const resJson: any = await httpPostJson(
+      'http://127.0.0.1:11434/api/generate',
+      { model: modelName, prompt, stream: false },
+      8000
+    );
+    const cleaned = cleanCodeFences(resJson?.response || '');
+    return cleaned.length > 10 ? cleaned : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildCommitRefinePrompt(draftJson: any): string {
+  return [
+    'Write a clean, concise Conventional Commit message (subject line + bullet-point body) for the following uncommitted changes.',
+    'Output ONLY the raw commit message text without markdown code fences or commentary.',
+    '',
+    'AST Baseline Draft:',
+    draftJson.fullCommitMessage,
+    '',
+    'Diff Excerpt:',
+    draftJson.compactDiffForLlm || '',
+  ].join('\n');
+}
+
+function cleanCodeFences(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```[a-zA-Z0-9_-]*\r?\n/, '')
+    .replace(/\r?\n```$/, '')
+    .trim();
+}
+
+function httpGetJson(url: string, timeoutMs: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { timeout: timeoutMs }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+  });
+}
+
+function httpPostJson(url: string, bodyObj: any, timeoutMs: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(bodyObj);
+    const parsedUrl = new URL(url);
+    const req = http.request(
+      {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port,
+        path: parsedUrl.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => {
+          try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.write(payload);
+    req.end();
+  });
 }
