@@ -320,6 +320,7 @@ public class UserConfiguration
     public bool OpenAfterGeneration { get; set; } = false;
     public bool IncludeSourceCode { get; set; } = false;
     public bool FilterToTargetFile { get; set; } = false;
+    public bool FocusCodeToFile { get; set; } = false;
 
     public string? Task { get; set; }
     public string OutputLanguage { get; set; } = "en";

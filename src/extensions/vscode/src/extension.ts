@@ -892,7 +892,7 @@ async function showScopeAndExportPopups(
     // Sub-flow 1: Graphify Knowledge Graph
     if (categoryPick.category === 'graphify') {
       interface GraphifyChoiceItem extends vscode.QuickPickItem {
-        mode: 'codebase' | 'merged' | 'subgraph' | 'gitHighlight' | 'tests';
+        mode: 'codebase' | 'merged' | 'codebaseWithFileCode' | 'subgraph' | 'gitHighlight' | 'tests';
       }
 
       const graphifyChoices: GraphifyChoiceItem[] = [
@@ -902,6 +902,16 @@ async function showScopeAndExportPopups(
           detail: 'Indexes all source files, computes PageRank God Nodes, circular cycles, and builds interactive force canvas',
           mode: 'codebase',
         },
+        ...(filePath
+          ? [
+              {
+                label: `$(sparkle) Entire Codebase Graph + ${path.basename(filePath)} Code Context (Merged)`,
+                description: 'Whole-Repo Architecture Map + This File Source Code',
+                detail: `Macro architecture & Mermaid diagram of entire codebase + full source code classes strictly for ${path.basename(filePath)} and dependencies`,
+                mode: 'codebaseWithFileCode' as const,
+              },
+            ]
+          : []),
         {
           label: '$(sparkle) Merged: Graphify Architecture + Full Source Code',
           description: 'Macro Graph + Source Code Implementations',
@@ -938,12 +948,14 @@ async function showScopeAndExportPopups(
       });
       if (!pick) return;
 
-      if (pick.mode === 'merged') {
-        await promptAndRunGraphify(filePath, undefined, true, false);
+      if (pick.mode === 'codebaseWithFileCode') {
+        await promptAndRunGraphify(filePath, path.basename(filePath!), true, false, true);
+      } else if (pick.mode === 'merged') {
+        await promptAndRunGraphify(filePath, undefined, true, false, false);
       } else if (pick.mode === 'subgraph') {
-        await promptAndRunGraphify(filePath, path.basename(filePath!), false, true);
+        await promptAndRunGraphify(filePath, path.basename(filePath!), false, true, false);
       } else {
-        await promptAndRunGraphify(filePath, undefined, false, false);
+        await promptAndRunGraphify(filePath, undefined, false, false, false);
       }
       return;
     }
@@ -980,9 +992,15 @@ async function showScopeAndExportPopups(
                 gitScope: 'file' as GitScopeType,
               },
               {
+                label: `$(sparkle) Entire Codebase Graph + ${path.basename(filePath)} Code Context (Merged)`,
+                description: 'Macro Architecture Map + This File Source Code',
+                detail: `Macro architecture map (whole repo) + full source code classes strictly for ${path.basename(filePath)} and direct dependencies`,
+                gitScope: 'graphifyCodebaseWithFileCode' as any,
+              },
+              {
                 label: '$(sparkle) Merged: Graphify Architecture + Full Source Code',
-                description: 'Macro Architecture Map + Source Classes',
-                detail: 'Embeds Mermaid architecture flowchart and PageRank God Nodes table right before the full source code blocks',
+                description: 'Macro Architecture Map + All Source Classes',
+                detail: 'Embeds Mermaid architecture flowchart and PageRank God Nodes table right before the full source code blocks of all workspace files',
                 gitScope: 'graphifyMerged' as any,
               },
             ]
@@ -1013,8 +1031,13 @@ async function showScopeAndExportPopups(
       });
       if (!contextPick) return;
 
+      if ((contextPick.gitScope as string) === 'graphifyCodebaseWithFileCode') {
+        await promptAndRunGraphify(filePath, path.basename(filePath!), true, false, true);
+        return;
+      }
+
       if ((contextPick.gitScope as string) === 'graphifyMerged') {
-        await promptAndRunGraphify(filePath, undefined, true, false);
+        await promptAndRunGraphify(filePath, undefined, true, false, false);
         return;
       }
 
@@ -2131,7 +2154,8 @@ async function promptAndRunGraphify(
   filePath?: string,
   focusFile?: string,
   includeCodeDefault: boolean = false,
-  filterToTargetDefault: boolean = false
+  filterToTargetDefault: boolean = false,
+  focusCodeToFileDefault: boolean = false
 ) {
   const workspaceFolder =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
@@ -2148,6 +2172,7 @@ async function promptAndRunGraphify(
     gitFlag: string;
     includeCode: boolean;
     filterToTarget: boolean;
+    focusCodeToFile: boolean;
   }
 
   const scopeItems: GraphifyScopeItem[] = [
@@ -2159,7 +2184,22 @@ async function promptAndRunGraphify(
       gitFlag: '',
       includeCode: includeCodeDefault,
       filterToTarget: false,
+      focusCodeToFile: false,
     },
+    ...(filePath
+      ? [
+          {
+            label: `$(sparkle) Entire Codebase Graph + ${path.basename(filePath)} Code Context (Merged)`,
+            description: 'Whole-Repo Architecture Map + This File Source Code',
+            detail: `Macro architecture & Mermaid diagram of entire codebase + full source code classes strictly for ${path.basename(filePath)} and dependencies`,
+            includeTests: false,
+            gitFlag: '',
+            includeCode: true,
+            filterToTarget: false,
+            focusCodeToFile: true,
+          },
+        ]
+      : []),
     {
       label: '$(sparkle) Entire Codebase + Full Source Code Context (Merged Architecture & Classes)',
       description: 'Macro Graph + Source Code Implementations',
@@ -2168,6 +2208,7 @@ async function promptAndRunGraphify(
       gitFlag: '',
       includeCode: true,
       filterToTarget: false,
+      focusCodeToFile: false,
     },
     {
       label: '$(git-merge) Entire Codebase + Highlight Uncommitted Git Changes',
@@ -2177,6 +2218,7 @@ async function promptAndRunGraphify(
       gitFlag: '--git',
       includeCode: includeCodeDefault,
       filterToTarget: false,
+      focusCodeToFile: false,
     },
     {
       label: '$(beaker) Entire Codebase + Test Files',
@@ -2186,6 +2228,7 @@ async function promptAndRunGraphify(
       gitFlag: '',
       includeCode: includeCodeDefault,
       filterToTarget: false,
+      focusCodeToFile: false,
     },
   ];
 
@@ -2199,11 +2242,14 @@ async function promptAndRunGraphify(
       gitFlag: '',
       includeCode: includeCodeDefault,
       filterToTarget: true,
+      focusCodeToFile: false,
     });
   }
 
   let scopePick: GraphifyScopeItem | undefined;
-  if (filterToTargetDefault && filePath) {
+  if (focusCodeToFileDefault && filePath) {
+    scopePick = scopeItems.find((s) => s.focusCodeToFile);
+  } else if (filterToTargetDefault && filePath) {
     scopePick = scopeItems.find((s) => s.filterToTarget);
   }
 
@@ -2277,7 +2323,9 @@ async function promptAndRunGraphify(
       if (scopePick.includeCode) {
         args.push('--include-code');
       }
-      if (scopePick.filterToTarget && filePath) {
+      if (scopePick.focusCodeToFile && filePath) {
+        args.push('--file', filePath, '--focus-code');
+      } else if (scopePick.filterToTarget && filePath) {
         args.push('--file', filePath, '--single-file');
       }
       if (scopePick.gitFlag) {

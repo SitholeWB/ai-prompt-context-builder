@@ -114,7 +114,8 @@ public static class KnowledgeGraphService
         int? maxTokens = null,
         bool filterToTargetFile = false,
         Action<int, string>? progressCallback = null,
-        string? targetFilePath = null)
+        string? targetFilePath = null,
+        bool focusCodeToFile = false)
     {
         try
         {
@@ -501,7 +502,7 @@ public static class KnowledgeGraphService
                 FocusedFile = targetFile != null ? Path.GetRelativePath(wsRoot, targetFile).Replace('\\', '/') : null,
             };
 
-            string markdown = RenderKnowledgeGraphMarkdown(result, outputLanguage, includeSourceCode, maxTokens, wsRoot);
+            string markdown = RenderKnowledgeGraphMarkdown(result, outputLanguage, includeSourceCode, maxTokens, wsRoot, focusCodeToFile);
             result.GeneratedMarkdown = markdown;
             result.GraphMarkdownTokens = estimator.EstimateTokens(markdown).TokenCount;
             result.TokenSavingsPercent = totalRawTokens > 0
@@ -768,7 +769,8 @@ public static class KnowledgeGraphService
         string outputLanguage,
         bool includeSourceCode = false,
         int? maxTokens = null,
-        string wsRoot = "")
+        string wsRoot = "",
+        bool focusCodeToFile = false)
     {
         string langCode = MarkdownGenerator.NormalizeLanguageCode(outputLanguage);
         string langDisplay = MarkdownGenerator.GetNaturalLanguageDisplayName(langCode);
@@ -921,7 +923,26 @@ public static class KnowledgeGraphService
             sb.AppendLine();
             sb.AppendLine("## Full Source Code Implementation & Classes");
             sb.AppendLine();
-            sb.AppendLine("Below is the full source code implementation of the classes and components within this architecture network:");
+            HashSet<string>? allowedCodeFiles = null;
+            if (focusCodeToFile && !string.IsNullOrEmpty(res.FocusedFile))
+            {
+                allowedCodeFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { res.FocusedFile };
+                var focusNode = res.Nodes.FirstOrDefault(n =>
+                    n.RelativePath.Equals(res.FocusedFile, StringComparison.OrdinalIgnoreCase) ||
+                    n.Id.Equals(res.FocusedFile, StringComparison.OrdinalIgnoreCase));
+                if (focusNode != null)
+                {
+                    foreach (var dep in focusNode.OutgoingTargets)
+                    {
+                        allowedCodeFiles.Add(dep);
+                    }
+                }
+                sb.AppendLine($"Below is the full source code implementation strictly for `{Path.GetFileName(res.FocusedFile)}` and its direct dependencies within the architecture network:");
+            }
+            else
+            {
+                sb.AppendLine("Below is the full source code implementation of the classes and components within this architecture network:");
+            }
             sb.AppendLine();
 
             var estimator = new ApproximateTokenEstimator();
@@ -930,7 +951,9 @@ public static class KnowledgeGraphService
             int codeFilesCount = 0;
 
             var codeNodes = res.Nodes
-                .OrderByDescending(n => n.PageRank)
+                .Where(n => allowedCodeFiles == null || allowedCodeFiles.Contains(n.RelativePath))
+                .OrderByDescending(n => n.RelativePath.Equals(res.FocusedFile, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(n => n.PageRank)
                 .ThenBy(n => n.RelativePath, StringComparer.OrdinalIgnoreCase);
 
             foreach (var node in codeNodes)

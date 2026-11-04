@@ -68,6 +68,7 @@ The interactive flow guides you through **3 clearly organized action categories*
 
 ##### 🕸️ Category 1: Graphify Knowledge Graph (Visual Architecture & Codebase Map)
 * **Entire Codebase Knowledge Graph** *(Primary #1)* — Indexes the entire repository, computes PageRank God Nodes, detects circular dependency cycles, and launches the interactive visual graph canvas + saves the compact AI Architecture Map (`codebase-knowledge-graph.md`).
+* **Entire Codebase Graph + `<filename>` Code Context (Merged)** *(New in v2.3.8)* — Macro architecture map of the entire repository + full source code implementations strictly for the active file and its direct dependencies.
 * **Merged: Graphify Architecture + Full Source Code** — The ultimate AI prompt: combines the high-level Graphify macro architecture map (Mermaid diagram, God Nodes, cycle report) with the full source code implementations of all analyzed classes.
 * **Single File Subgraph (`<filename>`)** — Isolates and renders strictly the selected file and its direct/transitive callers and dependencies.
 * **Entire Codebase + Highlight Uncommitted Git Changes** — Visualizes the whole repo and illuminates all modified/uncommitted files in emerald green.
@@ -76,7 +77,8 @@ The interactive flow guides you through **3 clearly organized action categories*
 ##### 📄 Category 2: AI Prompt & Context Builder (Code & AST Dependencies for LLMs)
 * **Active File: Dependencies Only (No Git Changes)** — Fast 1-click prompt: extracts AST dependency tree and full class implementations of the selected file.
 * **Active File: Git Diff + Dependencies Tree** — Includes staged/unstaged changes for this file plus upstream/downstream context.
-* **Merged: Graphify Architecture + Full Source Code** — Embeds Mermaid architecture flowchart and God Nodes table right before the full source code blocks.
+* **Entire Codebase Graph + `<filename>` Code Context (Merged)** — Embeds whole-repo Mermaid architecture flowchart and God Nodes table right before the full source code blocks of the active file.
+* **Merged: Graphify Architecture + Full Source Code** — Embeds Mermaid architecture flowchart and God Nodes table right before the full source code blocks of all files.
 * **Symbol at Cursor + Dependencies** — Automatically discovers the class/method at your cursor and extracts its focused dependency tree.
 * **Entire Workspace / Project Scope** — Traces dependencies starting from the project boundary.
 

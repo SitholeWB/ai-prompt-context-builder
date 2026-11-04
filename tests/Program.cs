@@ -1087,6 +1087,20 @@ public class Program
             Assert(singleFileRes.Success, "Single-file subgraph succeeded");
             Assert(singleFileRes.TotalFiles == 2, $"Single-file subgraph for ShippingService should contain 2 files (ShippingService + CoreHub), got {singleFileRes.TotalFiles}");
             Assert(singleFileRes.Nodes.Any(n => n.FileName == "ShippingService.cs") && singleFileRes.Nodes.Any(n => n.FileName == "CoreHub.cs"), "Subgraph correctly includes ShippingService and CoreHub");
+
+            // Verification of Entire Codebase Graph + Single File Code Context (New Feature)
+            var codebaseWithFileCodeRes = KnowledgeGraphService.BuildKnowledgeGraph(
+                tempRepo,
+                includeTests: false,
+                saveMarkdown: false,
+                includeSourceCode: true,
+                targetFilePath: shippingPath,
+                focusCodeToFile: true);
+            Assert(codebaseWithFileCodeRes.Success, "Codebase Graph + Single File Code Context succeeded");
+            Assert(codebaseWithFileCodeRes.TotalFiles == 4, $"Expected all 4 files in macro graph, got {codebaseWithFileCodeRes.TotalFiles}");
+            Assert(codebaseWithFileCodeRes.GeneratedMarkdown.Contains("strictly for `ShippingService.cs`"), "Markdown intro notes strictly for ShippingService.cs");
+            Assert(codebaseWithFileCodeRes.GeneratedMarkdown.Contains("### File: `services/ShippingService.cs`"), "Contains ShippingService code");
+            Assert(!codebaseWithFileCodeRes.GeneratedMarkdown.Contains("### File: `services/OrderService.cs`"), "Does NOT contain unrelated OrderService code");
         }
         finally
         {
