@@ -847,14 +847,20 @@ async function showScopeAndExportPopups(
     gitScope: GitScopeType;
   }
 
-  const fileItem: ScopeQuickPickItem | undefined = filePath
-    ? {
-        label: '$(file-code) Dependencies Only (No Git Changes)',
-        description: `Classic AI Context (${path.basename(filePath)})`,
-        detail: 'Trace full AST dependency tree of the selected file without Git diffs',
-        gitScope: 'none',
-      }
-    : undefined;
+  // Detect word / symbol at cursor if active editor is editing this file
+  let cursorSymbol: string | undefined;
+  const activeEditor = vscode.window.activeTextEditor;
+  if (activeEditor && (!filePath || activeEditor.document.uri.fsPath === filePath)) {
+    const sel = activeEditor.selection;
+    let s = activeEditor.document.getText(sel).trim();
+    if (!s) {
+      const wordRange = activeEditor.document.getWordRangeAtPosition(sel.active);
+      if (wordRange) s = activeEditor.document.getText(wordRange).trim();
+    }
+    if (s && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)) {
+      cursorSymbol = s;
+    }
+  }
 
   const fileGraphifyItem: ScopeQuickPickItem | undefined = filePath
     ? {
@@ -865,12 +871,30 @@ async function showScopeAndExportPopups(
       }
     : undefined;
 
+  const fileItem: ScopeQuickPickItem | undefined = filePath
+    ? {
+        label: '$(file-code) Dependencies Only (No Git Changes)',
+        description: `Classic AI Context (${path.basename(filePath)})`,
+        detail: 'Trace full AST dependency tree of the selected file without Git diffs',
+        gitScope: 'none',
+      }
+    : undefined;
+
   const singleFileGitItem: ScopeQuickPickItem | undefined = filePath
     ? {
         label: '$(diff) Single File Git Changes + Dependencies Tree',
         description: `Current File (${path.basename(filePath)})`,
         detail: 'Trace dependency tree of the selected file and include its Git diff',
         gitScope: 'file',
+      }
+    : undefined;
+
+  const cursorItem: ScopeQuickPickItem | undefined = (filePath && cursorSymbol)
+    ? {
+        label: `$(symbol-class) Symbol at Cursor: "${cursorSymbol}" + Dependencies`,
+        description: `Targeted AST Root (${path.basename(filePath)})`,
+        detail: `Focus AST dependency traversal starting strictly from symbol "${cursorSymbol}"`,
+        gitScope: 'symbol' as any,
       }
     : undefined;
 
@@ -925,10 +949,12 @@ async function showScopeAndExportPopups(
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
     if (fileItem) scopeItems.push(fileItem);
     if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
+    if (cursorItem) scopeItems.push(cursorItem);
   } else {
-    if (fileItem) scopeItems.push(fileItem);
     if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
+    if (fileItem) scopeItems.push(fileItem);
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
+    if (cursorItem) scopeItems.push(cursorItem);
     const codebaseGraphify = gitItems.find((i) => i.gitScope === 'graphify');
     if (codebaseGraphify) scopeItems.push(codebaseGraphify);
     scopeItems.push(...gitItems.filter((i) => i.gitScope !== 'graphify'));
@@ -946,9 +972,9 @@ async function showScopeAndExportPopups(
   if (!chosenScope) {
     const scopePick = await vscode.window.showQuickPick(scopeItems, {
       title: filePath
-        ? `AI Prompt & Context: ${path.basename(filePath)}`
-        : 'AI Prompt & Context: Git & Workspace Scopes',
-      placeHolder: 'Step 1: Select Context Scope (File Dependencies, Graphify Visualizer, or Git Scopes)',
+        ? `Graphify — Codebase Graph & AI Context: ${path.basename(filePath)}`
+        : 'Graphify — Codebase Graph & AI Context: Git & Workspace Scopes',
+      placeHolder: 'Select Context Scope (Interactive Graph, File Dependencies, Git Scopes)',
     });
     if (!scopePick) return;
     chosenScope = scopePick.gitScope;
@@ -963,6 +989,15 @@ async function showScopeAndExportPopups(
 
   if ((chosenScope as string) === 'graphifyFile') {
     await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined);
+    return;
+  } else if ((chosenScope as string) === 'symbol') {
+    const targetPath = filePath || workspaceFolder || '';
+    const baseOptions: RunOptions = {
+      symbol: cursorSymbol,
+      gitScope: 'none',
+      includeGitDiff: false,
+    };
+    await runGeneration(targetPath, baseOptions);
     return;
   } else if (chosenScope === 'graphify') {
     await promptAndRunGraphify(filePath);
@@ -2061,9 +2096,6 @@ async function promptAndRunGraphify(filePath?: string, focusFile?: string) {
       title: focusFile
         ? `Graphify: ${focusFile} — Step 1/2: Select Scope`
         : 'Graphify Knowledge Graph — Step 1/2: Select Codebase Scope',
-      placeHolder: 'Choose which files to include in the Knowledge Graph',
-    }
-  );
       placeHolder: 'Choose which files to include in the Knowledge Graph',
     }
   );
