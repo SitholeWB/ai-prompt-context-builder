@@ -63,3 +63,5 @@ Thumbs.db
 # ==========================================
 *-context.md
 !tests/golden-files/*-context.md
+codebase-knowledge-graph.md
+scratch/

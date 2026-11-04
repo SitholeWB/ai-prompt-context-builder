@@ -850,9 +850,18 @@ async function showScopeAndExportPopups(
   const fileItem: ScopeQuickPickItem | undefined = filePath
     ? {
         label: '$(file-code) Dependencies Only (No Git Changes)',
-        description: `Classic Mode (${path.basename(filePath)})`,
-        detail: 'Trace full dependency tree of the selected file without Git diffs',
+        description: `Classic AI Context (${path.basename(filePath)})`,
+        detail: 'Trace full AST dependency tree of the selected file without Git diffs',
         gitScope: 'none',
+      }
+    : undefined;
+
+  const fileGraphifyItem: ScopeQuickPickItem | undefined = filePath
+    ? {
+        label: `$(type-hierarchy) Graphify: Visualize Dependencies & Architecture (${path.basename(filePath)})`,
+        description: 'Interactive Force Graph & AI Map',
+        detail: `Open interactive visual graph centered on ${path.basename(filePath)} and its dependency network`,
+        gitScope: 'graphifyFile' as any,
       }
     : undefined;
 
@@ -915,10 +924,14 @@ async function showScopeAndExportPopups(
     scopeItems.push(...gitItems);
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
     if (fileItem) scopeItems.push(fileItem);
+    if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
   } else {
     if (fileItem) scopeItems.push(fileItem);
-    scopeItems.push(...gitItems);
+    if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
+    const codebaseGraphify = gitItems.find((i) => i.gitScope === 'graphify');
+    if (codebaseGraphify) scopeItems.push(codebaseGraphify);
+    scopeItems.push(...gitItems.filter((i) => i.gitScope !== 'graphify'));
   }
 
   let chosenScope = preselectedScope;
@@ -935,7 +948,7 @@ async function showScopeAndExportPopups(
       title: filePath
         ? `AI Prompt & Context: ${path.basename(filePath)}`
         : 'AI Prompt & Context: Git & Workspace Scopes',
-      placeHolder: 'Step 1: Select Context Scope (File Dependencies, Git Working Tree, Branch/PR, or Last X Commits)',
+      placeHolder: 'Step 1: Select Context Scope (File Dependencies, Graphify Visualizer, or Git Scopes)',
     });
     if (!scopePick) return;
     chosenScope = scopePick.gitScope;
@@ -948,7 +961,10 @@ async function showScopeAndExportPopups(
   let compareBranch: string | undefined;
   let commitCount: number | undefined;
 
-  if (chosenScope === 'graphify') {
+  if ((chosenScope as string) === 'graphifyFile') {
+    await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined);
+    return;
+  } else if (chosenScope === 'graphify') {
     await promptAndRunGraphify(filePath);
     return;
   } else if (chosenScope === 'draftCommit') {
@@ -992,30 +1008,45 @@ async function showScopeAndExportPopups(
     includeGitDiff = diffPick.includeDiff;
   }
 
-  // Popup 3: Export with Defaults vs Custom Options
+  // Popup 3: Export with Defaults vs Graphify vs Custom Options
   const ui = getUiStrings();
   const activeLang = getActiveLanguageOption();
-  const modePick = await vscode.window.showQuickPick(
+  interface ExportModeQuickPickItem extends vscode.QuickPickItem {
+    actionType: 'defaults' | 'graphify' | 'custom';
+  }
+
+  const modePick = await vscode.window.showQuickPick<ExportModeQuickPickItem>(
     [
       {
         label: ui.exportDefaults,
         description: `Instant Generation • ${activeLang.flag} ${activeLang.nativeName}`,
         detail: 'Full dependency graph, automatic token budget, comments preserved, tools/lockfiles excluded',
-        isDefaults: true,
+        actionType: 'defaults',
+      },
+      {
+        label: '$(type-hierarchy) Graphify: Open Interactive Knowledge Graph',
+        description: `Visual Force Canvas & Architecture Map${filePath ? ` (${path.basename(filePath)})` : ''}`,
+        detail: 'Launch the interactive zoomable visual graph dashboard with PageRank God Nodes, circular cycles & clusters',
+        actionType: 'graphify',
       },
       {
         label: ui.customOptions,
         description: 'Step-by-Step Configuration',
         detail: 'Configure token budget, comment stripping, traversal depth, output language, destination & custom prompt',
-        isDefaults: false,
+        actionType: 'custom',
       },
     ],
     {
       title: `${ui.chooseExportMode} (${activeLang.flag} ${activeLang.nativeName})`,
-      placeHolder: 'Instant Defaults or Step-by-Step Custom Options',
+      placeHolder: 'Instant Defaults, Graphify Visualizer, or Step-by-Step Custom Options',
     }
   );
   if (!modePick) return;
+
+  if (modePick.actionType === 'graphify') {
+    await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined);
+    return;
+  }
 
   const baseOptions: RunOptions = {
     gitScope: chosenScope,
@@ -1028,7 +1059,7 @@ async function showScopeAndExportPopups(
 
   const targetPath = filePath || workspaceFolder || '';
 
-  if (modePick.isDefaults) {
+  if (modePick.actionType === 'defaults') {
     await runGeneration(targetPath, baseOptions);
   } else {
     await promptAndRunCustomOptions(targetPath, baseOptions);
@@ -1980,7 +2011,7 @@ function httpPostJson(url: string, bodyObj: any, timeoutMs: number): Promise<any
   });
 }
 
-async function promptAndRunGraphify(filePath?: string) {
+async function promptAndRunGraphify(filePath?: string, focusFile?: string) {
   const workspaceFolder =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
     (filePath ? path.dirname(filePath) : undefined);
@@ -1993,6 +2024,17 @@ async function promptAndRunGraphify(filePath?: string) {
   // Step 1: Select Graphify Scope
   const scopePick = await vscode.window.showQuickPick(
     [
+      ...(focusFile
+        ? [
+            {
+              label: `$(type-hierarchy) Focus on ${focusFile} & Transitive Dependencies`,
+              description: 'Targeted Dependency Network',
+              detail: `Builds the whole Knowledge Graph and automatically highlights, centers and inspects ${focusFile}`,
+              includeTests: false,
+              gitFlag: '',
+            },
+          ]
+        : []),
       {
         label: '$(type-hierarchy) Entire Codebase (Production Source Files)',
         description: 'Recommended • Fast Whole-Repo AST Graph',
@@ -2016,7 +2058,12 @@ async function promptAndRunGraphify(filePath?: string) {
       },
     ],
     {
-      title: 'Graphify Knowledge Graph — Step 1/2: Select Codebase Scope',
+      title: focusFile
+        ? `Graphify: ${focusFile} — Step 1/2: Select Scope`
+        : 'Graphify Knowledge Graph — Step 1/2: Select Codebase Scope',
+      placeHolder: 'Choose which files to include in the Knowledge Graph',
+    }
+  );
       placeHolder: 'Choose which files to include in the Knowledge Graph',
     }
   );
@@ -2117,7 +2164,7 @@ async function promptAndRunGraphify(filePath?: string) {
       }
 
       if (modePick.openVisualizer) {
-        openGraphifyWebviewPanel(graphRes, workspaceFolder);
+        openGraphifyWebviewPanel(graphRes, workspaceFolder, focusFile);
       } else if (graphRes.outputPath && fs.existsSync(graphRes.outputPath)) {
         const doc = await vscode.workspace.openTextDocument(graphRes.outputPath);
         await vscode.window.showTextDocument(doc);
@@ -2144,7 +2191,7 @@ async function promptAndRunGraphify(filePath?: string) {
   );
 }
 
-function openGraphifyWebviewPanel(graphRes: any, workspaceFolder: string) {
+function openGraphifyWebviewPanel(graphRes: any, workspaceFolder: string, initialFocusFile?: string) {
   const panel = vscode.window.createWebviewPanel(
     'aiPromptContextBuilderGraphify',
     `Graphify: ${graphRes.workspaceName || 'Codebase'} (${graphRes.totalFiles} files)`,
@@ -2155,7 +2202,7 @@ function openGraphifyWebviewPanel(graphRes: any, workspaceFolder: string) {
     }
   );
 
-  panel.webview.html = buildGraphifyWebviewHtml(graphRes);
+  panel.webview.html = buildGraphifyWebviewHtml(graphRes, initialFocusFile);
 
   panel.webview.onDidReceiveMessage(async (msg) => {
     if (msg.command === 'openFile' && msg.relativePath) {
@@ -2187,7 +2234,7 @@ function openGraphifyWebviewPanel(graphRes: any, workspaceFolder: string) {
   });
 }
 
-function buildGraphifyWebviewHtml(graphRes: any): string {
+function buildGraphifyWebviewHtml(graphRes: any, initialFocusFile?: string): string {
   const safeJson = JSON.stringify({
     workspaceName: graphRes.workspaceName,
     scopeDescription: graphRes.scopeDescription,
@@ -2803,7 +2850,20 @@ function buildGraphifyWebviewHtml(graphRes: any): string {
     vscode.postMessage({ command: 'copyMarkdown' });
   };
 
-  if (selectedNode) selectNode(selectedNode);
+  const initFocus = ${JSON.stringify(initialFocusFile || '')};
+  if (initFocus) {
+    document.getElementById('searchInput').value = initFocus;
+    searchQuery = initFocus.trim();
+    const targetMatch = (data.nodes || []).find(n => n.fileName.toLowerCase() === initFocus.toLowerCase() || n.relativePath.toLowerCase().endsWith(initFocus.toLowerCase()));
+    if (targetMatch) {
+      selectedNode = targetMatch;
+      showInspector(targetMatch);
+    }
+    simTicks = 200;
+  } else if (selectedNode) {
+    selectNode(selectedNode);
+  }
+
   requestAnimationFrame(draw);
 </script>
 </body>

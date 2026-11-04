@@ -30,6 +30,10 @@
 
 **Give ChatGPT, Claude, Copilot, and DeepSeek a complete mental model of your entire repository—without installing external Python packages or wasting 100,000+ tokens.**
 
+<p align="center">
+  <img src="media/graphify-visualizer-demo.png" alt="Graphify Interactive Codebase Knowledge Graph Canvas" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
+</p>
+
 Built directly into the extension with **zero external dependencies**, **Graphify** scans your entire codebase across 20+ languages and produces:
 
 1. **Interactive Force-Directed Knowledge Graph in VS Code**:
@@ -52,15 +56,21 @@ Generate clean, dependency-aware AI prompts directly inside your editor with sin
 ### How to Use
 
 #### 1. Single Right-Click or Activity Bar Sidebar Icon (Interactive Popup Flow)
-* Right-click any source file in the Explorer or Editor (or open the **AI Prompt & Context Builder** icon in the left Activity Bar) and click **Generate AI Prompt & Context**.
+
+<p align="center">
+  <img src="media/popup-options-demo.png" alt="Graphify in Single-File QuickPick Options" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
+</p>
+
+* Right-click any source file in the Explorer or Editor (or open the **Graphify — Codebase Graph & AI Context Builder** icon in the left Activity Bar) and click **Generate AI Prompt & Context**.
 * **Popup 1 — Select Context & Git Scope**:
   * **Dependencies Only (No Git Changes)** — Classic mode: trace the full dependency tree of the selected file without Git diffs.
+  * **Graphify: Visualize Dependencies & Architecture (`<filename>`)** *(New in v2.3.3)* — Instantly open the interactive force-directed Knowledge Graph focused directly on this file, highlighting its callers, dependencies, blast radius, and God Node status!
   * **All Git Changes (Staged + Unstaged) + Dependencies Tree** — Discover all modified, added, and untracked source files in your workspace and trace their combined dependency trees.
   * **Staged Git Changes ONLY + Dependencies Tree** — Discover only staged (`git add`) files and trace their dependency trees.
   * **Unstaged Git Changes ONLY + Dependencies Tree** — Discover only unstaged working tree modifications and trace their dependency trees.
   * **Compare Branch / Pull Request + Dependencies Tree...** — Pick any local or remote branch (`main`, `develop`, `origin/main`, etc.) to compare against `HEAD` (`base...HEAD`) and trace the dependency trees of all PR-modified files.
   * **Last X Commits + Dependencies Tree...** — Select the last `1`, `2`, `3`, `5`, `10`, or custom `N` commits (`HEAD~N..HEAD`) and trace the dependency trees of all touched files.
-  * **Single File Git Changes + Dependencies Tree** — Trace the dependency tree of the selected file and include its Git diff.
+  * **Active File: Git Diff + Dependencies** — Trace the dependency tree of the selected file and include its Git diff.
 * **Popup 2 — Select Output Content** *(when a Git scope is selected)*:
   * **Git Diff + Full Dependencies Tree (Recommended)** — Embeds the unified (`+` / `-`) Git diff patch (and commit log summary for PRs/commits) at the top of the Markdown file **plus** the complete source code of all modified files and their dependency trees.
   * **Dependencies Tree Only (No Diff Text)** — Includes the complete source code of the Git-modified files and their dependency trees without the raw diff block.
