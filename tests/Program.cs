@@ -71,6 +71,7 @@ public class Program
         await RunTestAsync("39. Git Branch / Pull Request Comparison & Last X Commits + Dependencies Tree", TestGitBranchCompareAndLastCommits);
         RunTest("40. Deterministic AST + Diff Git Commit Message Drafter (No AI)", TestGitCommitDraftService);
         await RunTestAsync("41. Multi-Language Localization: isiZulu, Español & 10-Language Prompt Output", TestMultiLanguageOutputLocalization);
+        RunTest("42. Graphify Knowledge Graph: PageRank God Nodes, Tarjan Cycles & AI Map", TestKnowledgeGraphService);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -1025,6 +1026,49 @@ public class Program
         Assert(esRes.Success, $"Español context generation succeeded: {esRes.ErrorMessage}");
         Assert(esRes.GeneratedMarkdown!.Contains("🇪🇸 Español (Spanish)"), "Markdown includes Español language badge");
         Assert(esRes.GeneratedMarkdown.Contains("Por favor, proporciona todas las explicaciones"), "Markdown includes Spanish response instruction");
+    }
+
+    private static void TestKnowledgeGraphService()
+    {
+        string tempRepo = Path.Combine(Path.GetTempPath(), "ai-ctx-graphify-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, "core"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, "services"));
+        try
+        {
+            // CoreHub.cs is imported/used by 3 services (so CoreHub should be the #1 PageRank God Node)
+            File.WriteAllText(Path.Combine(tempRepo, "core", "CoreHub.cs"), "public class CoreHub {\n    public void ExecuteCore() {}\n}\n");
+            File.WriteAllText(Path.Combine(tempRepo, "services", "OrderService.cs"), "public class OrderService {\n    private CoreHub _hub = new CoreHub();\n    private BillingService _b;\n}\n");
+            File.WriteAllText(Path.Combine(tempRepo, "services", "BillingService.cs"), "public class BillingService {\n    private CoreHub _hub = new CoreHub();\n    private OrderService _o;\n}\n");
+            File.WriteAllText(Path.Combine(tempRepo, "services", "ShippingService.cs"), "public class ShippingService {\n    private CoreHub _hub = new CoreHub();\n}\n");
+
+            var graphRes = KnowledgeGraphService.BuildKnowledgeGraph(
+                tempRepo,
+                includeTests: false,
+                saveMarkdown: false,
+                outputLanguage: "zu");
+
+            Assert(graphRes.Success, $"Graphify BuildKnowledgeGraph succeeded: {graphRes.ErrorMessage}");
+            Assert(graphRes.TotalFiles == 4, $"Expected 4 files in graph, got {graphRes.TotalFiles}");
+            Assert(graphRes.TotalEdges >= 5, $"Expected at least 5 edges, got {graphRes.TotalEdges}");
+
+            // CoreHub.cs has 3 incoming edges -> highest PageRank God Node
+            var topNode = graphRes.Nodes.First();
+            Assert(topNode.FileName == "CoreHub.cs", $"Expected CoreHub.cs to be #1 PageRank node, got {topNode.FileName}");
+            Assert(topNode.InDegree == 3, $"Expected CoreHub.cs InDegree == 3, got {topNode.InDegree}");
+            Assert(graphRes.GodNodes.Any(g => g.FileName == "CoreHub.cs"), "CoreHub.cs identified as a God Node");
+
+            // OrderService <-> BillingService forms a circular dependency cycle
+            Assert(graphRes.CircularCycles.Count >= 1, "Tarjan SCC detected circular dependency between OrderService and BillingService");
+
+            // Markdown & Mermaid checks
+            Assert(graphRes.MermaidDiagram.Contains("flowchart LR"), "Mermaid architecture diagram generated");
+            Assert(graphRes.GeneratedMarkdown.Contains("# Codebase Knowledge Graph (Graphify Architecture Map)"), "Markdown contains Graphify title");
+            Assert(graphRes.GeneratedMarkdown.Contains("🇿🇦 isiZulu (Zulu)"), "Graphify Markdown respects OutputLanguage (isiZulu)");
+        }
+        finally
+        {
+            try { Directory.Delete(tempRepo, true); } catch { }
+        }
     }
 
     private static void RunGitCmd(string workDir, string args)

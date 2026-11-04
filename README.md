@@ -2,11 +2,12 @@
 
 <img src="docs/images/icon.png" width="128" height="128" alt="AI Prompt Context Builder Icon" style="border-radius: 24px;" />
 
-# 🧠 AI Prompt & Context Builder (`aipromptcontext`)
+# 🧠 AI Context Builder, Prompt Generator & Graphify Knowledge Graph (`aipromptcontext`)
 
-**Generate portable, dependency-aware, AI-ready prompts and code context from any repository.**
+**Graphify your entire codebase into an interactive AST Knowledge Graph, generate dependency-aware AI prompts & Git diffs, and draft commits — 100% self-contained.**
 
 [![CI](https://github.com/SitholeWB/ai-prompt-context-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/SitholeWB/ai-prompt-context-builder/actions)
+[![Graphify](https://img.shields.io/badge/Graphify-Codebase_Knowledge_Graph-f59e0b)](#%EF%B8%8F-graphify-codebase-knowledge-graph--interactive-visualizer)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![C#](https://img.shields.io/badge/C%23-12.0-239120?logo=csharp)](https://learn.microsoft.com/en-us/dotnet/csharp/)
 [![Roslyn](https://img.shields.io/badge/Roslyn-Semantic_Compiler_API-blue)](https://github.com/dotnet/roslyn)
@@ -16,14 +17,29 @@
 [![Privacy](https://img.shields.io/badge/Privacy-100%25_Local_Only-success)](#-security--privacy-guarantee)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-*A developer selects a file or symbol. AI Context Builder analyzes the source, discovers direct and transitive dependencies across multiple languages, links framework companion files, applies deterministic token and comment policies, and generates exactly one authoritative Markdown document with complete, untruncated source files.*
+*Select a file, symbol, Git diff, or your entire repository. AI Context Builder & Graphify analyzes the codebase using deterministic compiler ASTs, builds an interactive Knowledge Graph (PageRank "God Nodes", circular dependency cycles, and domain clusters), and generates authoritative, AI-ready Markdown prompts.*
 
-[VS Code Extension Guide](#-vs-code-extension-guide) • [Why AI Context Builder?](#-why-ai-context-builder) • [Supported Languages](#-supported-languages--capability-matrix) • [CLI Quickstart](#-cli-quickstart) • [Architecture](#-architecture)
+[Graphify Knowledge Graph](#%EF%B8%8F-graphify-codebase-knowledge-graph--interactive-visualizer) • [VS Code Extension Guide](#-vs-code-extension-guide) • [Supported Languages](#-supported-languages--capability-matrix) • [CLI Quickstart](#-cli-quickstart) • [Architecture](#-architecture)
 
 </div>
 
 
 ---
+
+## 🕸️ Graphify: Codebase Knowledge Graph & Interactive Visualizer
+
+**Give ChatGPT, Claude, Copilot, and DeepSeek a complete mental model of your entire repository—without installing external Python packages or wasting 100,000+ tokens.**
+
+Built directly into the extension with **zero external dependencies**, **Graphify** scans your entire codebase across 20+ languages and produces:
+
+1. **Interactive Force-Directed Knowledge Graph in VS Code**:
+   - Click **`Graphify: Codebase Knowledge Graph...`** in the Activity Bar Sidebar (or run `Graphify: Build Interactive Knowledge Graph & AI Architecture Map`).
+   - **★ God Node Detection (PageRank Centrality)**: Automatically highlights core architectural hubs and bottlenecks that the rest of the codebase depends on.
+   - **⚠ Circular Dependency Detection (Tarjan's SCC Algorithm)**: Surfaces exact file-level dependency cycles.
+   - **● Git Modified Overlay**: Highlights uncommitted files directly inside the architecture graph.
+   - **Click-to-Inspect & Jump to Code**: Click any node to inspect its exported AST symbols, incoming callers (`Used By`), and outgoing imports (`Depends On`), double-click to open the file, or click **✨ AI Prompt** to generate context for that node.
+2. **Token-Efficient AI Architecture Map (`codebase-knowledge-graph.md`)**:
+   - Compresses an entire codebase's architecture into a single queryable Markdown document (**~85%–96% token savings** compared to raw files) with an embedded **Mermaid Architecture Flowchart** (` ```mermaid `), God Nodes table, circular cycle report, and full AST symbol & adjacency map.
 
 ## 🔌 VS Code Extension Guide
 
@@ -91,7 +107,10 @@ AI Context Builder analyzes your code using deep compiler ASTs, automatically di
 
 | Command | Title | Action |
 | :--- | :--- | :--- |
-| `aiPromptContextBuilder.generateFromFile` | **AI Prompt: Generate from Current File** | Analyzes the active file and all transitive dependencies |
+| `aiPromptContextBuilder.graphifyCodebase` | **Graphify: Build Interactive Knowledge Graph & AI Architecture Map** | Builds the interactive force-directed Knowledge Graph & `codebase-knowledge-graph.md` |
+| `aiPromptContextBuilder.generateFromFile` | **Generate AI Prompt & Context** | Opens the interactive Scope, Git Diff & Export popup |
+| `aiPromptContextBuilder.draftCommitMessage` | **Draft Git Commit Message (AST Rules / Built-in Model)** | Drafts a Conventional Commit message from uncommitted changes & fills the Git box |
+| `aiPromptContextBuilder.changeLanguage` | **Change Language (EN / ES / FR / DE / ZH / JA / PT / RU / ZU / AF)** | Switches Sidebar UI and AI response language across 10 languages |
 | `aiPromptContextBuilder.generateFromSymbol`| **AI Prompt: Generate from Symbol at Cursor**| Centers analysis on the selected class/function symbol |
 | `aiPromptContextBuilder.generateWithOptions`| **AI Prompt: Generate with Options...** | Opens interactive wizard for budget, depth, and comment policy |
 | `aiPromptContextBuilder.generateAndCopy` | **AI Prompt: Generate and Copy to Clipboard** | Generates prompt and copies directly to clipboard |

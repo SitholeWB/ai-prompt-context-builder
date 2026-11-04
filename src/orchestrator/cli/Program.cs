@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using AiPromptContextBuilder.Core;
+using AiPromptContextBuilder.Core.Graph;
 using AiPromptContextBuilder.Core.Protocol;
 using AiPromptContextBuilder.Core.Workers;
 using AiPromptContextBuilder.Core.Workspace;
@@ -30,7 +31,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("aipromptcontext (aicontext) version 2.1.0");
+            Console.WriteLine("aipromptcontext (aicontext) version 2.3.0");
             return 0;
         }
 
@@ -86,7 +87,8 @@ public class Program
 
         string command = args[0];
         bool isDraftCommit = command == "draft-commit";
-        int argIndex = (command == "generate" || command == "draft-commit") ? 1 : 0;
+        bool isGraphify = command == "graphify";
+        int argIndex = (command == "generate" || command == "draft-commit" || command == "graphify") ? 1 : 0;
 
         var config = new UserConfiguration();
         string format = "text";
@@ -232,10 +234,65 @@ public class Program
                 case "--draft-commit":
                     isDraftCommit = true;
                     break;
+                case "--graphify":
+                    isGraphify = true;
+                    break;
                 case "--output-language" or "--locale":
                     config.OutputLanguage = NextVal();
                     break;
             }
+        }
+
+        if (isGraphify)
+        {
+            string startPath = !string.IsNullOrWhiteSpace(config.WorkspacePath)
+                ? config.WorkspacePath
+                : (!string.IsNullOrWhiteSpace(config.RootPath) ? config.RootPath : Directory.GetCurrentDirectory());
+
+            var graphRes = KnowledgeGraphService.BuildKnowledgeGraph(
+                startPath,
+                config.IncludeTests,
+                config.GitScope,
+                config.GitCompareTarget,
+                config.GitCommitCount,
+                config.SaveToFile,
+                config.OutputPath,
+                config.OutputLanguage,
+                (pct, msg) => Console.Error.WriteLine($"PROGRESS: {pct}% - {msg}"));
+
+            if (!graphRes.Success)
+            {
+                if (format == "json")
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        errorCode = graphRes.ErrorCode ?? "UnexpectedError",
+                        message = graphRes.ErrorMessage ?? "Failed to build knowledge graph."
+                    }, JsonOpts));
+                }
+                else
+                {
+                    Console.Error.WriteLine($"Error [{graphRes.ErrorCode}]: {graphRes.ErrorMessage}");
+                }
+                return 1;
+            }
+
+            if (format == "json")
+            {
+                Console.WriteLine(JsonSerializer.Serialize(graphRes, JsonOpts));
+            }
+            else
+            {
+                Console.WriteLine($"Codebase Knowledge Graph (Graphify) generated successfully!");
+                Console.WriteLine($"  Output file:      {graphRes.OutputPath}");
+                Console.WriteLine($"  Total files:      {graphRes.TotalFiles}");
+                Console.WriteLine($"  Dependency edges: {graphRes.TotalEdges}");
+                Console.WriteLine($"  God Nodes (Hubs): {graphRes.GodNodes.Count}");
+                Console.WriteLine($"  Circular cycles:  {graphRes.CircularCycles.Count}");
+                Console.WriteLine($"  Token savings:    ~{graphRes.TokenSavingsPercent}% ({graphRes.RawCodebaseTokens:N0} -> {graphRes.GraphMarkdownTokens:N0} tokens)");
+            }
+            return 0;
         }
 
         if (isDraftCommit)
@@ -392,13 +449,13 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"AI Prompt & Context Builder (aipromptcontext) - Version 2.1.0
-Generates portable, dependency-aware, AI-ready source prompts and context from an existing repository.
+        Console.WriteLine(@"AI Prompt & Context Builder + Graphify Knowledge Graph (aipromptcontext) - Version 2.3.0
+Generates portable, dependency-aware AI prompts, Git diffs, and Graphify codebase knowledge graphs.
 
 Usage:
   aipromptcontext generate --file <path> [options]
   aipromptcontext generate --git [--workspace <path>] [options]
-  aipromptcontext generate --git-staged [--workspace <path>] [options]
+  aipromptcontext graphify [--workspace <path>] [--include-tests <bool>] [options]
   aipromptcontext draft-commit [--workspace <path>] [--staged | --git-unstaged | --git-all]
   aipromptcontext check-workers
   (or aicontext / aiprompt)

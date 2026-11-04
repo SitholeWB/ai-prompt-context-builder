@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
 
-type GitScopeType = 'none' | 'all' | 'staged' | 'unstaged' | 'file' | 'branch' | 'commits' | 'draftCommit';
+type GitScopeType = 'none' | 'all' | 'staged' | 'unstaged' | 'file' | 'branch' | 'commits' | 'draftCommit' | 'graphify';
 type SupportedLanguageCode = 'en' | 'es' | 'fr' | 'de' | 'zh' | 'ja' | 'pt' | 'ru' | 'zu' | 'af';
 
 interface LanguageOption {
@@ -102,6 +102,8 @@ const LANGUAGE_CATALOG: LanguageOption[] = [
 interface LocalizedUiStrings {
   generatePrompt: string;
   interactivePopup: string;
+  graphifyCodebase: string;
+  graphifySubtitle: string;
   draftCommit: string;
   noAiBuiltIn: string;
   allGitChanges: string;
@@ -125,6 +127,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   en: {
     generatePrompt: 'Generate AI Prompt & Context...',
     interactivePopup: 'Interactive Popup',
+    graphifyCodebase: 'Graphify: Codebase Knowledge Graph...',
+    graphifySubtitle: 'Interactive Graph & AI Map',
     draftCommit: 'Draft Git Commit Message...',
     noAiBuiltIn: 'No AI / Built-in LM',
     allGitChanges: 'All Git Changes + Dependencies',
@@ -146,6 +150,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   es: {
     generatePrompt: 'Generar Prompt y Contexto IA...',
     interactivePopup: 'Menú Interactivo',
+    graphifyCodebase: 'Graphify: Grafo de Conocimiento...',
+    graphifySubtitle: 'Grafo Interactivo + Mapa IA',
     draftCommit: 'Redactar Mensaje de Commit Git...',
     noAiBuiltIn: 'Sin IA / Modelo Integrado',
     allGitChanges: 'Todos los Cambios Git + Dependencias',
@@ -167,6 +173,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   fr: {
     generatePrompt: 'Générer Prompt & Contexte IA...',
     interactivePopup: 'Menu Interactif',
+    graphifyCodebase: 'Graphify : Graphe de Connaissances...',
+    graphifySubtitle: 'Graphe Interactif & Carte IA',
     draftCommit: 'Rédiger un Message de Commit Git...',
     noAiBuiltIn: 'Sans IA / Modèle Intégré',
     allGitChanges: 'Tous les Changements Git + Dépendances',
@@ -188,6 +196,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   de: {
     generatePrompt: 'KI-Prompt & Kontext generieren...',
     interactivePopup: 'Interaktives Menü',
+    graphifyCodebase: 'Graphify: Codebase-Wissensgraph...',
+    graphifySubtitle: 'Interaktiver Graph & KI-Karte',
     draftCommit: 'Git-Commit-Nachricht entwerfen...',
     noAiBuiltIn: 'Ohne KI / Integriertes Modell',
     allGitChanges: 'Alle Git-Änderungen + Abhängigkeiten',
@@ -209,6 +219,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   zh: {
     generatePrompt: '生成 AI 提示词与代码上下文...',
     interactivePopup: '交互式菜单',
+    graphifyCodebase: 'Graphify: 全代码库知识图谱...',
+    graphifySubtitle: '可视化图谱 + AI 架构地图',
     draftCommit: '起草 Git 提交信息 (Commit)...',
     noAiBuiltIn: '无 AI 规则 / 内置模型',
     allGitChanges: '所有 Git 更改 + 依赖树',
@@ -230,6 +242,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   ja: {
     generatePrompt: 'AIプロンプトとコンテキストを生成...',
     interactivePopup: '対話型ポップアップ',
+    graphifyCodebase: 'Graphify: コードベース知識グラフ...',
+    graphifySubtitle: '対話型グラフ & AIマップ',
     draftCommit: 'Gitコミットメッセージを作成...',
     noAiBuiltIn: 'AIなし / 内蔵モデル',
     allGitChanges: 'すべてのGit変更 + 依存関係ツリー',
@@ -251,6 +265,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   pt: {
     generatePrompt: 'Gerar Prompt e Contexto de IA...',
     interactivePopup: 'Menu Interativo',
+    graphifyCodebase: 'Graphify: Grafo de Conhecimento...',
+    graphifySubtitle: 'Grafo Interativo & Mapa IA',
     draftCommit: 'Redigir Mensagem de Commit Git...',
     noAiBuiltIn: 'Sem IA / Modelo Integrado',
     allGitChanges: 'Todas as Alterações Git + Dependências',
@@ -272,6 +288,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   ru: {
     generatePrompt: 'Создать AI-промпт и контекст...',
     interactivePopup: 'Интерактивное меню',
+    graphifyCodebase: 'Graphify: Граф знаний кодовой базы...',
+    graphifySubtitle: 'Интерактивный граф и AI-карта',
     draftCommit: 'Создать сообщение Git Commit...',
     noAiBuiltIn: 'Без ИИ / Встроенная модель',
     allGitChanges: 'Все изменения Git + Зависимости',
@@ -293,6 +311,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   zu: {
     generatePrompt: 'Khiqiza i-AI Prompt kanye ne-Context...',
     interactivePopup: 'Imenyu Yokukhetha',
+    graphifyCodebase: 'Graphify: Igrafu Yolwazi lwe-Codebase...',
+    graphifySubtitle: 'Igrafu Ebonakalayo + Imephu ye-AI',
     draftCommit: 'Bhala Umlayezo we-Git Commit...',
     noAiBuiltIn: 'Ngaphandle kwe-AI / Imodeli Yangaphakathi',
     allGitChanges: 'Zonke Izinguquko ze-Git + ama-Dependencies',
@@ -314,6 +334,8 @@ const UI_STRINGS: Record<SupportedLanguageCode, LocalizedUiStrings> = {
   af: {
     generatePrompt: 'Genereer KI-Prompt & Konteks...',
     interactivePopup: 'Interaktiewe Kieslys',
+    graphifyCodebase: 'Graphify: Kodebasis-Kennisgrafiek...',
+    graphifySubtitle: 'Interaktiewe Grafiek & KI-Kaart',
     draftCommit: 'Skryf Git-Commit-Boodskap...',
     noAiBuiltIn: 'Geen KI / Ingeboude Model',
     allGitChanges: 'Alle Git-Veranderinge + Afhanklikhede',
@@ -404,6 +426,12 @@ export function activate(context: vscode.ExtensionContext) {
   registerCmd('generateFromGit', async (uri?: vscode.Uri) => {
     const filePath = resolveTargetFilePath(uri);
     await showScopeAndExportPopups(filePath, true);
+  });
+
+  // 1g. Graphify: Build Interactive Knowledge Graph & AI Architecture Map
+  registerCmd('graphifyCodebase', async (uri?: vscode.Uri) => {
+    const filePath = resolveTargetFilePath(uri);
+    await promptAndRunGraphify(filePath);
   });
 
   // 1e. Draft Git Commit Message (AST Rules / VS Code Built-in LM / Local Ollama)
@@ -869,6 +897,12 @@ async function showScopeAndExportPopups(
       gitScope: 'commits',
     },
     {
+      label: '$(type-hierarchy) Graphify: Entire Codebase Knowledge Graph (Interactive + AI Map)...',
+      description: 'PageRank Hubs, Cycles & Visual Map',
+      detail: 'Build an interactive zoomable Knowledge Graph & compact AI Architecture Map of the entire codebase (~95% token savings)',
+      gitScope: 'graphify',
+    },
+    {
       label: '$(comment-discussion) Draft Git Commit Message (Uncommitted Changes)...',
       description: 'AST Rules or Built-in Model',
       detail: 'Draft a Conventional Commit message from uncommitted changes and auto-fill the Git commit box',
@@ -914,7 +948,10 @@ async function showScopeAndExportPopups(
   let compareBranch: string | undefined;
   let commitCount: number | undefined;
 
-  if (chosenScope === 'draftCommit') {
+  if (chosenScope === 'graphify') {
+    await promptAndRunGraphify(filePath);
+    return;
+  } else if (chosenScope === 'draftCommit') {
     await promptAndDraftCommitMessage(filePath);
     return;
   } else if (chosenScope === 'branch') {
@@ -1408,6 +1445,13 @@ class ActionsTreeProvider implements vscode.TreeDataProvider<ActionTreeItem> {
         'Open the full interactive popup selector (Dependencies Only vs Git Scopes, Diff Options & Export Mode)',
         'sparkle',
         'aiPromptContextBuilder.generateFromFile'
+      ),
+      new ActionTreeItem(
+        ui.graphifyCodebase,
+        ui.graphifySubtitle,
+        'Build an interactive force-directed Knowledge Graph (PageRank God Nodes, Circular Cycles, Domain Clusters) & compact AI Architecture Map of the entire codebase',
+        'type-hierarchy',
+        'aiPromptContextBuilder.graphifyCodebase'
       ),
       new ActionTreeItem(
         ui.draftCommit,
@@ -1935,3 +1979,834 @@ function httpPostJson(url: string, bodyObj: any, timeoutMs: number): Promise<any
     req.end();
   });
 }
+
+async function promptAndRunGraphify(filePath?: string) {
+  const workspaceFolder =
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
+    (filePath ? path.dirname(filePath) : undefined);
+
+  if (!workspaceFolder) {
+    vscode.window.showErrorMessage('Please open a workspace folder or file to build the Graphify Knowledge Graph.');
+    return;
+  }
+
+  // Step 1: Select Graphify Scope
+  const scopePick = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(type-hierarchy) Entire Codebase (Production Source Files)',
+        description: 'Recommended • Fast Whole-Repo AST Graph',
+        detail: 'Indexes all source files across the codebase, computes PageRank God Nodes, circular cycles & domain clusters',
+        includeTests: false,
+        gitFlag: '',
+      },
+      {
+        label: '$(git-merge) Entire Codebase + Highlight Uncommitted Git Changes',
+        description: 'Git-Aware Architecture Graph',
+        detail: 'Builds the whole codebase graph and highlights all uncommitted/modified files in emerald green',
+        includeTests: false,
+        gitFlag: '--git',
+      },
+      {
+        label: '$(beaker) Entire Codebase + Test Files',
+        description: 'Include Unit & Integration Tests',
+        detail: 'Includes test files and fixtures in the Knowledge Graph',
+        includeTests: true,
+        gitFlag: '',
+      },
+    ],
+    {
+      title: 'Graphify Knowledge Graph — Step 1/2: Select Codebase Scope',
+      placeHolder: 'Choose which files to include in the Knowledge Graph',
+    }
+  );
+  if (!scopePick) return;
+
+  // Step 2: Select Output Mode
+  const activeLang = getActiveLanguageOption();
+  const modePick = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(graph) Interactive Visual Graph + AI Knowledge Map Markdown',
+        description: `Recommended • ${activeLang.flag} ${activeLang.nativeName}`,
+        detail: 'Opens the interactive zoomable Graphify Visualizer in VS Code AND saves codebase-knowledge-graph.md (~95% token savings)',
+        openVisualizer: true,
+        saveMarkdown: true,
+      },
+      {
+        label: '$(eye) Interactive Visual Knowledge Graph Only (VS Code Dashboard)',
+        description: 'Force-Directed Node Explorer',
+        detail: 'Open the zoomable Graphify architecture explorer tab to inspect God Nodes, cycles, clusters, and jump to files',
+        openVisualizer: true,
+        saveMarkdown: false,
+      },
+      {
+        label: '$(markdown) AI Knowledge Map Markdown Only (codebase-knowledge-graph.md)',
+        description: 'For ChatGPT, Claude, Copilot & DeepSeek',
+        detail: 'Generate the token-efficient AST & Adjacency Knowledge Map + Mermaid diagram and open in editor',
+        openVisualizer: false,
+        saveMarkdown: true,
+      },
+    ],
+    {
+      title: 'Graphify Knowledge Graph — Step 2/2: Select Output View',
+      placeHolder: 'Open Interactive Graph Visualizer, AI Knowledge Map Markdown, or Both',
+    }
+  );
+  if (!modePick) return;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: 'Graphify: Building Codebase Knowledge Graph...',
+      cancellable: true,
+    },
+    async (progress, token) => {
+      progress.report({ message: 'Scanning workspace AST, PageRank hubs & Tarjan cycles...' });
+
+      const args = [
+        'graphify',
+        '--workspace',
+        workspaceFolder,
+        '--format',
+        'json',
+        '--include-tests',
+        scopePick.includeTests ? 'true' : 'false',
+        '--save',
+        modePick.saveMarkdown ? 'true' : 'false',
+      ];
+      if (scopePick.gitFlag) {
+        args.push(scopePick.gitFlag);
+      }
+      if (activeLang.code !== 'en') {
+        args.push('--output-language', activeLang.code);
+      }
+
+      const spec = resolveCommand(args);
+      outputChannel.appendLine(`[Graphify] ${spec.command} ${spec.args.join(' ')}`);
+
+      const graphRes = await new Promise<any>((resolve, reject) => {
+        const proc = spawn(spec.command, spec.args, spec.options);
+        token.onCancellationRequested(() => proc.kill());
+
+        let stdout = '';
+        let stderr = '';
+        proc.stdout.on('data', (d) => { stdout += d.toString(); });
+        proc.stderr.on('data', (d) => { stderr += d.toString(); });
+        proc.on('error', async (err) => {
+          await handleMissingRuntime(spec.command, err);
+          reject(err);
+        });
+        proc.on('close', () => {
+          try {
+            resolve(JSON.parse(stdout));
+          } catch {
+            reject(new Error(stderr || stdout || 'Failed to parse Graphify output.'));
+          }
+        });
+      });
+
+      if (!graphRes || !graphRes.success) {
+        vscode.window.showErrorMessage(`Graphify failed: ${graphRes?.message || 'No supported source files found.'}`);
+        return;
+      }
+
+      if (graphRes.outputPath && historyTreeProvider) {
+        lastGeneratedPath = graphRes.outputPath;
+        historyTreeProvider.addGeneratedFile(graphRes.outputPath, graphRes.totalFiles, graphRes.graphMarkdownTokens);
+      }
+
+      if (modePick.openVisualizer) {
+        openGraphifyWebviewPanel(graphRes, workspaceFolder);
+      } else if (graphRes.outputPath && fs.existsSync(graphRes.outputPath)) {
+        const doc = await vscode.workspace.openTextDocument(graphRes.outputPath);
+        await vscode.window.showTextDocument(doc);
+      }
+
+      const actionButtons = ['Copy AI Knowledge Map'];
+      if (graphRes.outputPath) actionButtons.unshift('Open Markdown Map');
+
+      vscode.window
+        .showInformationMessage(
+          `Graphify Complete: ${graphRes.totalFiles} files, ${graphRes.totalEdges} edges, ${graphRes.godNodes?.length || 0} God Nodes (~${graphRes.tokenSavingsPercent}% token savings).`,
+          ...actionButtons
+        )
+        .then(async (choice) => {
+          if (choice === 'Open Markdown Map' && graphRes.outputPath && fs.existsSync(graphRes.outputPath)) {
+            const doc = await vscode.workspace.openTextDocument(graphRes.outputPath);
+            await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+          } else if (choice === 'Copy AI Knowledge Map' && graphRes.generatedMarkdown) {
+            await vscode.env.clipboard.writeText(graphRes.generatedMarkdown);
+            vscode.window.showInformationMessage('Codebase Knowledge Map copied to clipboard!');
+          }
+        });
+    }
+  );
+}
+
+function openGraphifyWebviewPanel(graphRes: any, workspaceFolder: string) {
+  const panel = vscode.window.createWebviewPanel(
+    'aiPromptContextBuilderGraphify',
+    `Graphify: ${graphRes.workspaceName || 'Codebase'} (${graphRes.totalFiles} files)`,
+    vscode.ViewColumn.One,
+    {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+    }
+  );
+
+  panel.webview.html = buildGraphifyWebviewHtml(graphRes);
+
+  panel.webview.onDidReceiveMessage(async (msg) => {
+    if (msg.command === 'openFile' && msg.relativePath) {
+      const absPath = path.join(workspaceFolder, msg.relativePath);
+      if (fs.existsSync(absPath)) {
+        const doc = await vscode.workspace.openTextDocument(absPath);
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+      }
+    } else if (msg.command === 'generateFilePrompt' && msg.relativePath) {
+      const absPath = path.join(workspaceFolder, msg.relativePath);
+      if (fs.existsSync(absPath)) {
+        await runGeneration(absPath, { workspacePath: workspaceFolder });
+      }
+    } else if (msg.command === 'openMarkdown') {
+      if (graphRes.outputPath && fs.existsSync(graphRes.outputPath)) {
+        const doc = await vscode.workspace.openTextDocument(graphRes.outputPath);
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+      } else if (graphRes.generatedMarkdown) {
+        const doc = await vscode.workspace.openTextDocument({
+          content: graphRes.generatedMarkdown,
+          language: 'markdown',
+        });
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
+      }
+    } else if (msg.command === 'copyMarkdown' && graphRes.generatedMarkdown) {
+      await vscode.env.clipboard.writeText(graphRes.generatedMarkdown);
+      vscode.window.showInformationMessage('Graphify AI Knowledge Map copied to clipboard!');
+    }
+  });
+}
+
+function buildGraphifyWebviewHtml(graphRes: any): string {
+  const safeJson = JSON.stringify({
+    workspaceName: graphRes.workspaceName,
+    scopeDescription: graphRes.scopeDescription,
+    totalFiles: graphRes.totalFiles,
+    totalEdges: graphRes.totalEdges,
+    totalSymbols: graphRes.totalSymbols,
+    rawCodebaseTokens: graphRes.rawCodebaseTokens,
+    graphMarkdownTokens: graphRes.graphMarkdownTokens,
+    tokenSavingsPercent: graphRes.tokenSavingsPercent,
+    nodes: graphRes.nodes || [],
+    edges: graphRes.edges || [],
+    godNodes: graphRes.godNodes || [],
+    circularCycles: graphRes.circularCycles || [],
+    clusters: graphRes.clusters || [],
+  }).replace(/</g, '\\u003c');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Graphify Knowledge Graph</title>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: #111827;
+    --panel-border: #1f2937;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --accent: #38bdf8;
+    --god: #f59e0b;
+    --mod: #10b981;
+    --cycle: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand-title {
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+  }
+  .metrics {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .pill {
+    background: #1e293b;
+    border: 1px solid #334155;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #e2e8f0;
+  }
+  .pill b { color: var(--accent); }
+  .pill.god b { color: var(--god); }
+  .pill.savings b { color: var(--mod); }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  input.search {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    width: 210px;
+  }
+  select.filter {
+    background: #0f172a;
+    border: 1px solid #334155;
+    color: #fff;
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  button.btn {
+    background: #1e293b;
+    border: 1px solid #3b82f6;
+    color: #f8fafc;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.btn:hover { background: #2563eb; }
+  button.btn.primary { background: #2563eb; border-color: #60a5fa; font-weight: 600; }
+  .workspace {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+  }
+  canvas:active { cursor: grabbing; }
+  .legend {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    background: rgba(17, 24, 39, 0.9);
+    border: 1px solid #374151;
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    gap: 14px;
+    font-size: 11px;
+    color: #d1d5db;
+    pointer-events: none;
+  }
+  .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  .sidebar {
+    width: 340px;
+    background: var(--panel);
+    border-left: 1px solid var(--panel-border);
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .card h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .node-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+  .node-path {
+    font-size: 11px;
+    color: var(--accent);
+    word-break: break-all;
+    margin-bottom: 8px;
+  }
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 6px;
+  }
+  .tag {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    color: #cbd5e1;
+    cursor: pointer;
+  }
+  .tag:hover { border-color: var(--accent); color: #fff; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .btn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .btn-row button { flex: 1; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <span class="brand-title">🕸️ Graphify Knowledge Graph — <span id="wsName"></span></span>
+      <div class="metrics">
+        <span class="pill"><b id="mFiles">0</b> Files</span>
+        <span class="pill"><b id="mEdges">0</b> Edges</span>
+        <span class="pill god"><b id="mGods">0</b> ★ God Nodes</span>
+        <span class="pill savings"><b id="mSavings">0%</b> Token Savings</span>
+      </div>
+    </div>
+    <div class="controls">
+      <input id="searchInput" class="search" type="text" placeholder="Search file or AST symbol..." />
+      <select id="filterSelect" class="filter">
+        <option value="all">All Nodes</option>
+        <option value="god">★ God Nodes (Core Hubs)</option>
+        <option value="modified">● Git Modified</option>
+        <option value="cycle">⚠ Circular Cycles</option>
+      </select>
+      <button class="btn" id="resetViewBtn">Reset Zoom</button>
+      <button class="btn" id="copyMdBtn">📋 Copy AI Map</button>
+      <button class="btn primary" id="openMdBtn">📄 Open AI Map (.md)</button>
+    </div>
+  </div>
+  <div class="workspace">
+    <div class="canvas-wrap">
+      <canvas id="graphCanvas"></canvas>
+      <div class="legend">
+        <span><i class="dot" style="background:#f59e0b"></i>★ God Node (Hub)</span>
+        <span><i class="dot" style="background:#10b981"></i>● Git Modified</span>
+        <span><i class="dot" style="background:#ef4444"></i>⚠ In Cycle</span>
+        <span><i class="dot" style="background:#38bdf8"></i>Standard Module (Sized by PageRank)</span>
+      </div>
+    </div>
+    <div class="sidebar">
+      <div class="card" id="inspectorCard">
+        <h3>Selected Node Inspector</h3>
+        <div id="inspectorBody">
+          <p style="font-size:12px;color:#9ca3af;">Click any node in the graph to inspect its AST symbols, PageRank centrality, incoming callers, and outgoing dependencies.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3>★ Top God Nodes (Core Bottlenecks)</h3>
+        <div id="godList" class="tag-list"></div>
+      </div>
+      <div class="card">
+        <h3>Domain / Module Clusters</h3>
+        <div id="clusterList" class="tag-list"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const vscode = acquireVsCodeApi();
+  const data = ${safeJson};
+
+  document.getElementById('wsName').textContent = data.workspaceName || 'Workspace';
+  document.getElementById('mFiles').textContent = data.totalFiles;
+  document.getElementById('mEdges').textContent = data.totalEdges;
+  document.getElementById('mGods').textContent = (data.godNodes || []).length;
+  document.getElementById('mSavings').textContent = '~' + (data.tokenSavingsPercent || 0) + '%';
+
+  const clusterColors = ['#38bdf8', '#a78bfa', '#34d399', '#f472b6', '#60a5fa', '#fb923c', '#2dd4bf', '#e879f9'];
+  const clusterColorMap = {};
+  (data.clusters || []).forEach((c, idx) => {
+    clusterColorMap[c.name] = clusterColors[idx % clusterColors.length];
+    const opt = document.createElement('option');
+    opt.value = 'cluster:' + c.name;
+    opt.textContent = 'Cluster: ' + c.name + ' (' + c.fileCount + ')';
+    document.getElementById('filterSelect').appendChild(opt);
+  });
+
+  const canvas = document.getElementById('graphCanvas');
+  const ctx = canvas.getContext('2d');
+  let width = 800, height = 600;
+  let camX = 0, camY = 0, camScale = 1;
+
+  const nodes = (data.nodes || []).map((n, i) => {
+    const angle = (i / Math.max(1, data.nodes.length)) * Math.PI * 2;
+    const radius = 140 + (i % 7) * 35;
+    return {
+      ...n,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+      vx: 0,
+      vy: 0,
+      r: Math.max(7, Math.min(22, 6 + (n.pageRank || 10) * 0.14))
+    };
+  });
+
+  const nodeById = {};
+  nodes.forEach(n => { nodeById[n.id] = n; });
+
+  const edges = (data.edges || []).map(e => ({
+    source: nodeById[e.source],
+    target: nodeById[e.target],
+    relationship: e.relationship
+  })).filter(e => e.source && e.target);
+
+  let selectedNode = nodes[0] || null;
+  let hoveredNode = null;
+  let draggedNode = null;
+  let isPanning = false;
+  let panStartX = 0, panStartY = 0;
+  let searchQuery = '';
+  let activeFilter = 'all';
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    width = rect.width;
+    height = rect.height;
+    canvas.width = width * window.devicePixelRatio;
+    canvas.height = height * window.devicePixelRatio;
+    ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function isNodeVisible(n) {
+    if (activeFilter === 'god' && !n.isGodNode) return false;
+    if (activeFilter === 'modified' && !n.isModified) return false;
+    if (activeFilter === 'cycle' && !n.isInCycle) return false;
+    if (activeFilter.startsWith('cluster:') && n.cluster !== activeFilter.slice(8)) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchFile = n.relativePath.toLowerCase().includes(q);
+      const matchSym = (n.symbols || []).some(s => s.toLowerCase().includes(q));
+      if (!matchFile && !matchSym) return false;
+    }
+    return true;
+  }
+
+  let simTicks = 0;
+  function stepPhysics() {
+    if (simTicks > 240 && !draggedNode) return;
+    simTicks++;
+    const visible = nodes.filter(isNodeVisible);
+    for (let i = 0; i < visible.length; i++) {
+      const a = visible[i];
+      for (let j = i + 1; j < visible.length; j++) {
+        const b = visible[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let distSq = dx * dx + dy * dy + 1;
+        if (distSq < 90000) {
+          let f = 1400 / distSq;
+          let dist = Math.sqrt(distSq);
+          let fx = (dx / dist) * f, fy = (dy / dist) * f;
+          a.vx -= fx; a.vy -= fy;
+          b.vx += fx; b.vy += fy;
+        }
+      }
+    }
+    for (const e of edges) {
+      const a = e.source, b = e.target;
+      if (!isNodeVisible(a) || !isNodeVisible(b)) continue;
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.sqrt(dx * dx + dy * dy) + 0.1;
+      let f = (dist - 120) * 0.015;
+      let fx = (dx / dist) * f, fy = (dy / dist) * f;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    }
+    for (const n of visible) {
+      if (n === draggedNode) continue;
+      n.vx -= n.x * 0.004;
+      n.vy -= n.y * 0.004;
+      n.vx *= 0.82;
+      n.vy *= 0.82;
+      n.x += n.vx;
+      n.y += n.vy;
+    }
+  }
+
+  function draw() {
+    stepPhysics();
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.translate(width / 2 + camX, height / 2 + camY);
+    ctx.scale(camScale, camScale);
+
+    // Draw edges
+    for (const e of edges) {
+      if (!isNodeVisible(e.source) || !isNodeVisible(e.target)) continue;
+      const isHighlighted = selectedNode && (e.source === selectedNode || e.target === selectedNode);
+      ctx.beginPath();
+      ctx.moveTo(e.source.x, e.source.y);
+      ctx.lineTo(e.target.x, e.target.y);
+      ctx.strokeStyle = isHighlighted
+        ? (e.source === selectedNode ? '#38bdf8' : '#f59e0b')
+        : 'rgba(148, 163, 184, 0.22)';
+      ctx.lineWidth = isHighlighted ? 2 : 1;
+      ctx.stroke();
+    }
+
+    // Draw nodes
+    for (const n of nodes) {
+      if (!isNodeVisible(n)) continue;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+
+      let fill = clusterColorMap[n.cluster] || '#38bdf8';
+      if (n.isInCycle) fill = '#ef4444';
+      if (n.isModified) fill = '#10b981';
+      if (n.isGodNode) fill = '#f59e0b';
+
+      ctx.fillStyle = fill;
+      ctx.fill();
+
+      if (n === selectedNode || n === hoveredNode) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = (n.isGodNode ? 'bold 11px ' : '10px ') + 'sans-serif';
+      const label = (n.isGodNode ? '★ ' : '') + n.fileName;
+      ctx.fillText(label, n.x + n.r + 4, n.y + 3);
+    }
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  function screenToWorld(sx, sy) {
+    return {
+      x: (sx - width / 2 - camX) / camScale,
+      y: (sy - height / 2 - camY) / camScale
+    };
+  }
+
+  function findNodeAt(wx, wy) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (!isNodeVisible(n)) continue;
+      const dx = wx - n.x, dy = wy - n.y;
+      if (dx * dx + dy * dy <= (n.r + 4) * (n.r + 4)) return n;
+    }
+    return null;
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const w = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const hit = findNodeAt(w.x, w.y);
+    if (hit) {
+      draggedNode = hit;
+      selectNode(hit);
+    } else {
+      isPanning = true;
+      panStartX = e.clientX - camX;
+      panStartY = e.clientY - camY;
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const w = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    if (draggedNode) {
+      draggedNode.x = w.x;
+      draggedNode.y = w.y;
+      simTicks = 180;
+    } else if (isPanning) {
+      camX = e.clientX - panStartX;
+      camY = e.clientY - panStartY;
+    } else {
+      hoveredNode = findNodeAt(w.x, w.y);
+    }
+  });
+
+  window.addEventListener('mouseup', () => {
+    draggedNode = null;
+    isPanning = false;
+  });
+
+  canvas.addEventListener('dblclick', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const w = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+    const hit = findNodeAt(w.x, w.y);
+    if (hit) {
+      vscode.postMessage({ command: 'openFile', relativePath: hit.relativePath });
+    }
+  });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 0.9;
+    camScale = Math.max(0.2, Math.min(4, camScale * factor));
+  }, { passive: false });
+
+  function selectNode(n) {
+    selectedNode = n;
+    if (!n) return;
+    const symsHtml = (n.symbols || []).length
+      ? n.symbols.map(s => '<span class="tag">' + s + '</span>').join('')
+      : '<span style="font-size:11px;color:#6b7280">No exported symbols</span>';
+
+    const outHtml = (n.outgoingTargets || []).length
+      ? n.outgoingTargets.map(t => '<span class="tag" data-Jump="' + t + '">→ ' + t.split('/').pop() + '</span>').join('')
+      : '<span style="font-size:11px;color:#6b7280">None (Leaf)</span>';
+
+    const inHtml = (n.incomingSources || []).length
+      ? n.incomingSources.map(s => '<span class="tag" data-Jump="' + s + '">← ' + s.split('/').pop() + '</span>').join('')
+      : '<span style="font-size:11px;color:#6b7280">None (Entrypoint)</span>';
+
+    document.getElementById('inspectorBody').innerHTML =
+      '<div class="node-title">' + (n.isGodNode ? '★ ' : '') + n.fileName + '</div>' +
+      '<div class="node-path">' + n.relativePath + '</div>' +
+      '<div class="stat-grid">' +
+        '<div>Role: <b>' + n.role + '</b></div>' +
+        '<div>PageRank: <b>' + n.pageRank + '</b></div>' +
+        '<div>Used By (In): <b>' + n.inDegree + '</b></div>' +
+        '<div>Depends On (Out): <b>' + n.outDegree + '</b></div>' +
+        '<div>Language: <b>' + n.language + '</b></div>' +
+        '<div>Lines: <b>' + n.lineCount + '</b></div>' +
+      '</div>' +
+      '<div style="margin-top:10px;font-size:11px;color:#9ca3af">Exported AST Symbols:</div>' +
+      '<div class="tag-list">' + symsHtml + '</div>' +
+      '<div style="margin-top:10px;font-size:11px;color:#9ca3af">Used By (Incoming Callers):</div>' +
+      '<div class="tag-list">' + inHtml + '</div>' +
+      '<div style="margin-top:10px;font-size:11px;color:#9ca3af">Depends On (Outgoing Imports):</div>' +
+      '<div class="tag-list">' + outHtml + '</div>' +
+      '<div class="btn-row">' +
+        '<button class="btn" id="openSourceBtn">📂 Open File</button>' +
+        '<button class="btn primary" id="genPromptBtn">✨ AI Prompt</button>' +
+      '</div>';
+
+    document.getElementById('openSourceBtn').onclick = () => {
+      vscode.postMessage({ command: 'openFile', relativePath: n.relativePath });
+    };
+    document.getElementById('genPromptBtn').onclick = () => {
+      vscode.postMessage({ command: 'generateFilePrompt', relativePath: n.relativePath });
+    };
+    document.querySelectorAll('[data-Jump]').forEach(el => {
+      el.addEventListener('click', () => {
+        const target = nodeById[el.getAttribute('data-Jump')];
+        if (target) {
+          selectNode(target);
+          camX = -target.x * camScale;
+          camY = -target.y * camScale;
+        }
+      });
+    });
+  }
+
+  // Populate God Nodes & Cluster lists
+  const godListEl = document.getElementById('godList');
+  (data.godNodes || []).forEach(g => {
+    const span = document.createElement('span');
+    span.className = 'tag';
+    span.style.borderColor = '#f59e0b';
+    span.textContent = '★ ' + g.fileName + ' (' + g.pageRank + ')';
+    span.onclick = () => {
+      const target = nodeById[g.id];
+      if (target) {
+        selectNode(target);
+        camX = -target.x * camScale;
+        camY = -target.y * camScale;
+      }
+    };
+    godListEl.appendChild(span);
+  });
+
+  const clusterListEl = document.getElementById('clusterList');
+  (data.clusters || []).forEach(c => {
+    const span = document.createElement('span');
+    span.className = 'tag';
+    span.textContent = c.name + ' (' + c.fileCount + ')';
+    span.onclick = () => {
+      document.getElementById('filterSelect').value = 'cluster:' + c.name;
+      activeFilter = 'cluster:' + c.name;
+      simTicks = 120;
+    };
+    clusterListEl.appendChild(span);
+  });
+
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQuery = e.target.value.trim();
+    simTicks = 150;
+  });
+  document.getElementById('filterSelect').addEventListener('change', (e) => {
+    activeFilter = e.target.value;
+    simTicks = 150;
+  });
+  document.getElementById('resetViewBtn').onclick = () => {
+    camX = 0; camY = 0; camScale = 1;
+    activeFilter = 'all';
+    document.getElementById('filterSelect').value = 'all';
+  };
+  document.getElementById('openMdBtn').onclick = () => {
+    vscode.postMessage({ command: 'openMarkdown' });
+  };
+  document.getElementById('copyMdBtn').onclick = () => {
+    vscode.postMessage({ command: 'copyMarkdown' });
+  };
+
+  if (selectedNode) selectNode(selectedNode);
+  requestAnimationFrame(draw);
+</script>
+</body>
+</html>`;
+}
+

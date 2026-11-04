@@ -1,9 +1,9 @@
 {
   "name": "ai-prompt-context-builder",
-  "displayName": "AI Context Builder & Prompt Generator",
+  "displayName": "AI Context Builder, Prompt Generator & Graphify Knowledge Graph",
   "icon": "media/icon.png",
-  "description": "Generate portable, dependency-aware AI prompts and source context from an existing repository.",
-  "version": "2.2.0",
+  "description": "Graphify your codebase into an interactive AST Knowledge Graph, generate dependency-aware AI prompts & Git diffs, and draft commits.",
+  "version": "2.3.0",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -27,6 +27,12 @@
     "Other"
   ],
   "keywords": [
+    "graphify",
+    "knowledge graph",
+    "code graph",
+    "architecture graph",
+    "dependency graph",
+    "dependency visualizer",
     "prompt",
     "prompts",
     "ai prompt generator",
@@ -46,7 +52,6 @@
     "source context",
     "code context",
     "dependencies",
-    "dependency graph",
     "dotnet",
     "csharp",
     "roslyn",
@@ -58,6 +63,7 @@
     "onView:aiPromptContextBuilder.historyView",
     "onCommand:aiPromptContextBuilder.generateFromFile",
     "onCommand:aiPromptContextBuilder.generateFromGit",
+    "onCommand:aiPromptContextBuilder.graphifyCodebase",
     "onCommand:aiPromptContextBuilder.draftCommitMessage",
     "onCommand:aiPromptContextBuilder.changeLanguage",
     "onCommand:aiPromptContextBuilder.generateFromSymbol",
@@ -107,6 +113,12 @@
         "command": "aiPromptContextBuilder.generateFromGit",
         "title": "Generate AI Prompt from Git Changes + Dependencies Tree",
         "category": "AI Context / Prompt"
+      },
+      {
+        "command": "aiPromptContextBuilder.graphifyCodebase",
+        "title": "Graphify: Build Interactive Knowledge Graph & AI Architecture Map",
+        "category": "AI Context / Prompt",
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "aiPromptContextBuilder.draftCommitMessage",
