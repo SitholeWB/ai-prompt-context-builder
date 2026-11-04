@@ -1219,6 +1219,27 @@ struct EngineConfig {
 };
 ");
 
+            // 10. React TSX file with functional component, arrow component, interface, and CSS Module companion
+            var tsxFile = Path.Combine(tempRepo, "OrderCard.tsx");
+            File.WriteAllText(tsxFile, @"
+import React from 'react';
+
+export interface OrderCardProps {
+    orderId: string;
+    amount: number;
+}
+
+export const OrderCard: React.FC<OrderCardProps> = ({ orderId, amount }) => {
+    return <div className=""order-card"">Order #{orderId}: ${amount}</div>;
+};
+
+export const useOrderCard = () => {
+    return { status: 'ready' };
+};
+");
+            var cssModuleFile = Path.Combine(tempRepo, "OrderCard.module.css");
+            File.WriteAllText(cssModuleFile, ".order-card { padding: 12px; background: #fff; }");
+
             var orchestrator = new ContextOrchestrator();
             orchestrator.RegisterAdapter(new DotNetAdapter());
 
@@ -1232,7 +1253,8 @@ struct EngineConfig {
                 "models.rs",
                 "Contracts.php",
                 "state.dart",
-                "types.hpp"
+                "types.hpp",
+                "OrderCard.tsx"
             };
 
             foreach (var relFile in testFiles)
@@ -1251,7 +1273,7 @@ struct EngineConfig {
                 Assert(result.GeneratedMarkdown.Contains(relFile), $"Markdown output should reference file {relFile}");
             }
 
-            // Also test explicit symbol targeting across all languages for interfaces, enums, structs, traits
+            // Also test explicit symbol targeting across all languages for interfaces, enums, structs, traits, React components
             var symbolTargetTests = new (string File, string Symbol)[]
             {
                 ("CommonTypes.cs", "IOrderProcessor"),
@@ -1262,7 +1284,9 @@ struct EngineConfig {
                 ("models.rs", "SocketHandler"),
                 ("Contracts.php", "StatusCheckerInterface"),
                 ("state.dart", "ViewState"),
-                ("types.hpp", "EngineConfig")
+                ("types.hpp", "EngineConfig"),
+                ("OrderCard.tsx", "OrderCard"),
+                ("OrderCard.tsx", "OrderCardProps")
             };
 
             foreach (var (relFile, sym) in symbolTargetTests)

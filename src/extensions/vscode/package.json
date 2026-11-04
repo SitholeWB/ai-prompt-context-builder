@@ -3,7 +3,7 @@
   "displayName": "AI Context Builder, Prompt Generator & Graphify Knowledge Graph",
   "icon": "media/icon.png",
   "description": "Graphify your codebase into an interactive AST Knowledge Graph, generate dependency-aware AI prompts & Git diffs, and draft commits.",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",

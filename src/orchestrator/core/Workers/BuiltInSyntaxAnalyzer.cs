@@ -492,7 +492,24 @@ public static class BuiltInSyntaxAnalyzer
             }
         }
 
-        // 9. Discovered declared types & functions (classes, interfaces, enums, types, functions)
+        // 9. Discovered declared types, components & functions (classes, interfaces, enums, types, React components, hooks)
+        bool isJsxFile = curFile.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) || curFile.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase) || curFile.EndsWith(".vue", StringComparison.OrdinalIgnoreCase);
+
+        // Check React / JSX companion style files (e.g. Button.tsx -> Button.module.css or Button.css)
+        if (isJsxFile)
+        {
+            string baseStem = Path.GetFileNameWithoutExtension(curFile);
+            string[] compStyleExts = { ".module.css", ".module.scss", ".css", ".scss" };
+            foreach (var cse in compStyleExts)
+            {
+                string candidateStyle = Path.Combine(dir, baseStem + cse);
+                if (File.Exists(candidateStyle) && !string.Equals(candidateStyle, curFile, StringComparison.OrdinalIgnoreCase))
+                {
+                    LinkAndQueue(fileNodeId, candidateStyle, RelationshipType.StyleReference, fragment, queue, visited, workspaceRoot);
+                }
+            }
+        }
+
         var typeMatches = Regex.Matches(content, @"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(class|interface|enum|type)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
         foreach (Match m in typeMatches)
         {
@@ -503,7 +520,8 @@ public static class BuiltInSyntaxAnalyzer
                 "interface" => NodeKind.Interface,
                 "enum" => NodeKind.Enum,
                 "type" => NodeKind.Type,
-                _ => NodeKind.Class
+                _ => (content.Contains("@Component") || (isJsxFile && char.IsUpper(name[0]))) ? NodeKind.Component :
+                     (content.Contains("@Injectable")) ? NodeKind.Service : NodeKind.Class
             };
             string rel = Path.GetRelativePath(workspaceRoot, curFile).Replace('\\', '/');
             string nodeId = $"type:{rel}#{name}";
@@ -528,16 +546,21 @@ public static class BuiltInSyntaxAnalyzer
             });
         }
 
-        var fnMatches = Regex.Matches(content, @"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+        // Functions and React function components (e.g. `export default function Header()` or `function Header()`)
+        var fnMatches = Regex.Matches(content, @"^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
         foreach (Match m in fnMatches)
         {
             string fnName = m.Groups[1].Value;
             string rel = Path.GetRelativePath(workspaceRoot, curFile).Replace('\\', '/');
             string fnId = $"func:{rel}#{fnName}";
+            if (fragment.Nodes.Any(n => n.Id == fnId)) continue;
+
+            NodeKind kind = (isJsxFile && char.IsUpper(fnName[0])) ? NodeKind.Component : NodeKind.Function;
+
             fragment.Nodes.Add(new GraphNode
             {
                 Id = fnId,
-                Kind = NodeKind.Function,
+                Kind = kind,
                 Language = Path.GetExtension(curFile).EndsWith("ts") || Path.GetExtension(curFile).EndsWith("tsx") ? "TypeScript" : "JavaScript",
                 AnalysisLevel = CapabilityLevel.SyntaxAware,
                 DisplayName = fnName,
@@ -549,6 +572,38 @@ public static class BuiltInSyntaxAnalyzer
             {
                 SourceNodeId = fileNodeId,
                 TargetNodeId = fnId,
+                Relationship = RelationshipType.Export,
+                Confidence = Confidence.Verified,
+                AnalysisLevel = CapabilityLevel.SyntaxAware
+            });
+        }
+
+        // Arrow function components and constants (e.g. `export const UserCard: React.FC<Props> = ...` or `export const useTheme = () => ...`)
+        var arrowMatches = Regex.Matches(content, @"^\s*(?:export\s+)?(?:const|let)\s+([A-Za-z0-9_]+)(?:\s*:\s*[A-Za-z0-9_<>.,\s\[\]]+)?\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z0-9_]+)\s*=>", RegexOptions.Multiline);
+        foreach (Match m in arrowMatches)
+        {
+            string compName = m.Groups[1].Value;
+            string rel = Path.GetRelativePath(workspaceRoot, curFile).Replace('\\', '/');
+            string compId = $"func:{rel}#{compName}";
+            if (fragment.Nodes.Any(n => n.Id == compId)) continue;
+
+            NodeKind kind = (isJsxFile && char.IsUpper(compName[0])) ? NodeKind.Component : NodeKind.Function;
+
+            fragment.Nodes.Add(new GraphNode
+            {
+                Id = compId,
+                Kind = kind,
+                Language = Path.GetExtension(curFile).EndsWith("ts") || Path.GetExtension(curFile).EndsWith("tsx") ? "TypeScript" : "JavaScript",
+                AnalysisLevel = CapabilityLevel.SyntaxAware,
+                DisplayName = compName,
+                QualifiedName = compName,
+                RelativePath = rel,
+                SourceAvailable = true
+            });
+            fragment.Edges.Add(new GraphEdge
+            {
+                SourceNodeId = fileNodeId,
+                TargetNodeId = compId,
                 Relationship = RelationshipType.Export,
                 Confidence = Confidence.Verified,
                 AnalysisLevel = CapabilityLevel.SyntaxAware

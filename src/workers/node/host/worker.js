@@ -208,6 +208,91 @@ function analyzeJsTsFile(filePath, relPath, content, fileNodeId, nodes, edges, q
           }
         }
 
+        // Interfaces, Enums, Type Aliases
+        if ((ts.isInterfaceDeclaration(node) || ts.isEnumDeclaration(node) || ts.isTypeAliasDeclaration(node)) && node.name) {
+          const typeName = node.name.text;
+          const typeKind = ts.isInterfaceDeclaration(node) ? 'Interface' : ts.isEnumDeclaration(node) ? 'Enum' : 'Type';
+          const typeNodeId = `type:${relPath}#${typeName}`;
+          nodes.push({
+            id: typeNodeId,
+            kind: typeKind,
+            language: 'TypeScript',
+            analysisLevel: 'Semantic',
+            displayName: typeName,
+            qualifiedName: typeName,
+            relativePath: relPath,
+            sourceAvailable: true,
+            diagnostics: [],
+            metadata: {},
+          });
+          edges.push({
+            sourceNodeId: fileNodeId,
+            targetNodeId: typeNodeId,
+            relationship: 'Export',
+            confidence: 'Verified',
+            analysisLevel: 'Semantic',
+            metadata: {},
+          });
+        }
+
+        // Functions & React Functional Components
+        if (ts.isFunctionDeclaration(node) && node.name) {
+          const fnName = node.name.text;
+          const isComp = /^[A-Z]/.test(fnName) && (filePath.endsWith('.tsx') || filePath.endsWith('.jsx'));
+          const fnNodeId = `func:${relPath}#${fnName}`;
+          nodes.push({
+            id: fnNodeId,
+            kind: isComp ? 'Component' : 'Function',
+            language: filePath.endsWith('.ts') || filePath.endsWith('.tsx') ? 'TypeScript' : 'JavaScript',
+            analysisLevel: 'Semantic',
+            displayName: fnName,
+            qualifiedName: fnName,
+            relativePath: relPath,
+            sourceAvailable: true,
+            diagnostics: [],
+            metadata: {},
+          });
+          edges.push({
+            sourceNodeId: fileNodeId,
+            targetNodeId: fnNodeId,
+            relationship: 'Export',
+            confidence: 'Verified',
+            analysisLevel: 'Semantic',
+            metadata: {},
+          });
+        }
+
+        // Arrow function components (export const Component = () => ...)
+        if (ts.isVariableStatement(node) && node.declarationList) {
+          for (const decl of node.declarationList.declarations) {
+            if (decl.name && ts.isIdentifier(decl.name) && decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))) {
+              const varName = decl.name.text;
+              const isComp = /^[A-Z]/.test(varName) && (filePath.endsWith('.tsx') || filePath.endsWith('.jsx'));
+              const varNodeId = `func:${relPath}#${varName}`;
+              nodes.push({
+                id: varNodeId,
+                kind: isComp ? 'Component' : 'Function',
+                language: filePath.endsWith('.ts') || filePath.endsWith('.tsx') ? 'TypeScript' : 'JavaScript',
+                analysisLevel: 'Semantic',
+                displayName: varName,
+                qualifiedName: varName,
+                relativePath: relPath,
+                sourceAvailable: true,
+                diagnostics: [],
+                metadata: {},
+              });
+              edges.push({
+                sourceNodeId: fileNodeId,
+                targetNodeId: varNodeId,
+                relationship: 'Export',
+                confidence: 'Verified',
+                analysisLevel: 'Semantic',
+                metadata: {},
+              });
+            }
+          }
+        }
+
         // Static imports: import ... from './...'
         if (ts.isImportDeclaration(node)) {
           const specifier = node.moduleSpecifier;

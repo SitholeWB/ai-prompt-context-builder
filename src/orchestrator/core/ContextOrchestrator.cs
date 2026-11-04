@@ -199,9 +199,9 @@ public class ContextOrchestrator
         var rootNodeIds = new List<string>();
         if (!rootTarget.IsSingleCandidate && string.IsNullOrEmpty(config.RootSymbol))
         {
-            var fileNode = rootFileNodes.FirstOrDefault(n => n.Kind == NodeKind.File);
+            var fileNode = rootFileNodes.FirstOrDefault(n => n.Kind is NodeKind.File or NodeKind.Component);
             if (fileNode != null) rootNodeIds.Add(fileNode.Id);
-            rootNodeIds.AddRange(rootFileNodes.Where(n => n.Kind is NodeKind.Class or NodeKind.Interface or NodeKind.Enum or NodeKind.Struct or NodeKind.Record or NodeKind.Function).Select(n => n.Id));
+            rootNodeIds.AddRange(rootFileNodes.Where(n => n.Kind is NodeKind.Class or NodeKind.Interface or NodeKind.Enum or NodeKind.Struct or NodeKind.Record or NodeKind.Function or NodeKind.Component or NodeKind.Service or NodeKind.Type).Select(n => n.Id));
             if (rootNodeIds.Count == 0) rootNodeIds.Add(rootTarget.RootNodeId);
 
             ImportanceScorer.CalculateScores(graph, rootNodeIds);
