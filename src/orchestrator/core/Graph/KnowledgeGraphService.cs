@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AiPromptContextBuilder.Core.Markdown;
 using AiPromptContextBuilder.Core.Protocol;
+using AiPromptContextBuilder.Core.Security;
 using AiPromptContextBuilder.Core.Tokenizer;
 using AiPromptContextBuilder.Core.Workers;
 using AiPromptContextBuilder.Core.Workspace;
@@ -74,6 +75,8 @@ public class KnowledgeGraphResult
     public List<string> OrphanFiles { get; set; } = new();
     public string MermaidDiagram { get; set; } = string.Empty;
     public string GeneratedMarkdown { get; set; } = string.Empty;
+    public bool IncludesSourceCode { get; set; }
+    public string? FocusedFile { get; set; }
 }
 
 public static class KnowledgeGraphService
@@ -107,6 +110,9 @@ public static class KnowledgeGraphService
         bool saveMarkdown = true,
         string? customOutputPath = null,
         string outputLanguage = "en",
+        bool includeSourceCode = false,
+        int? maxTokens = null,
+        bool filterToTargetFile = false,
         Action<int, string>? progressCallback = null)
     {
         try
@@ -372,6 +378,54 @@ public static class KnowledgeGraphService
                 }
             }
 
+            // Optional single file subgraph filter: include the target file and all its transitive dependencies & callers
+            if (filterToTargetFile && File.Exists(fullTarget))
+            {
+                string relFocus = Path.GetRelativePath(wsRoot, fullTarget).Replace('\\', '/');
+                var reachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { relFocus };
+
+                // Forward (Dependencies): nodes reachable from target
+                var queue = new Queue<string>();
+                queue.Enqueue(relFocus);
+                while (queue.Count > 0)
+                {
+                    string curr = queue.Dequeue();
+                    if (nodeMap.TryGetValue(curr, out var currNode))
+                    {
+                        foreach (var target in currNode.OutgoingTargets)
+                        {
+                            if (reachable.Add(target)) queue.Enqueue(target);
+                        }
+                    }
+                }
+
+                // Backward (Callers): nodes that reach target
+                queue.Enqueue(relFocus);
+                while (queue.Count > 0)
+                {
+                    string curr = queue.Dequeue();
+                    if (nodeMap.TryGetValue(curr, out var currNode))
+                    {
+                        foreach (var src in currNode.IncomingSources)
+                        {
+                            if (reachable.Add(src)) queue.Enqueue(src);
+                        }
+                    }
+                }
+
+                // Filter nodes and edges strictly to this connected subgraph
+                var filteredNodes = nodeMap.Values.Where(n => reachable.Contains(n.Id)).ToList();
+                edgesList = edgesList.Where(e => reachable.Contains(e.Source) && reachable.Contains(e.Target)).ToList();
+                scopeDesc = $"Single File Subgraph ({Path.GetFileName(relFocus)}: {filteredNodes.Count} connected files, {edgesList.Count} edges)";
+
+                // Replace nodeMap with filtered nodes
+                nodeMap.Clear();
+                foreach (var fn in filteredNodes)
+                {
+                    nodeMap[fn.Id] = fn;
+                }
+            }
+
             // 5. Identify Top "God Nodes" (Core Architectural Hubs) & Classify Node Roles
             var allNodesSorted = nodeMap.Values
                 .OrderByDescending(n => n.PageRank)
@@ -437,10 +491,12 @@ public static class KnowledgeGraphService
                 CircularCycles = cycles,
                 Clusters = clusters,
                 OrphanFiles = orphans,
-                MermaidDiagram = mermaid
+                MermaidDiagram = mermaid,
+                IncludesSourceCode = includeSourceCode,
+                FocusedFile = File.Exists(fullTarget) ? Path.GetRelativePath(wsRoot, fullTarget).Replace('\\', '/') : null,
             };
 
-            string markdown = RenderKnowledgeGraphMarkdown(result, outputLanguage);
+            string markdown = RenderKnowledgeGraphMarkdown(result, outputLanguage, includeSourceCode, maxTokens, wsRoot);
             result.GeneratedMarkdown = markdown;
             result.GraphMarkdownTokens = estimator.EstimateTokens(markdown).TokenCount;
             result.TokenSavingsPercent = totalRawTokens > 0
@@ -702,7 +758,12 @@ public static class KnowledgeGraphService
         return sb.ToString().TrimEnd();
     }
 
-    private static string RenderKnowledgeGraphMarkdown(KnowledgeGraphResult res, string outputLanguage)
+    private static string RenderKnowledgeGraphMarkdown(
+        KnowledgeGraphResult res,
+        string outputLanguage,
+        bool includeSourceCode = false,
+        int? maxTokens = null,
+        string wsRoot = "")
     {
         string langCode = MarkdownGenerator.NormalizeLanguageCode(outputLanguage);
         string langDisplay = MarkdownGenerator.GetNaturalLanguageDisplayName(langCode);
@@ -714,11 +775,15 @@ public static class KnowledgeGraphService
             : 0.0;
 
         var sb = new StringBuilder();
-        sb.AppendLine("# Codebase Knowledge Graph (Graphify Architecture Map)");
+        sb.AppendLine(includeSourceCode
+            ? "# Codebase Knowledge Graph & Source Code Context (Merged Architecture & Classes)"
+            : "# Codebase Knowledge Graph (Graphify Architecture Map)");
         sb.AppendLine();
         sb.AppendLine("## Task");
         sb.AppendLine();
-        sb.AppendLine("Use this deterministic AST & Dependency Knowledge Graph to understand the architecture, module boundaries, central hubs (\"God Nodes\"), and cross-file relationships of the codebase without needing to read every raw file.");
+        sb.AppendLine(includeSourceCode
+            ? "Use this deterministic AST & Dependency Knowledge Graph to understand the architecture, module boundaries, central hubs (\"God Nodes\"), and cross-file relationships of the codebase, with complete source code implementations included below."
+            : "Use this deterministic AST & Dependency Knowledge Graph to understand the architecture, module boundaries, central hubs (\"God Nodes\"), and cross-file relationships of the codebase without needing to read every raw file.");
         if (langCode != "en")
         {
             sb.AppendLine();
@@ -736,7 +801,14 @@ public static class KnowledgeGraphService
         }
         sb.AppendLine($"- **Languages Detected**: {(res.Languages.Count > 0 ? string.Join(", ", res.Languages) : "Auto")}");
         sb.AppendLine($"- **Graph Scale**: **{res.TotalFiles}** source files | **{res.TotalEdges}** dependency edges | **{res.TotalSymbols}** exported symbols | **{res.TotalLines:N0}** lines of code");
-        sb.AppendLine($"- **Token Efficiency**: Raw codebase is **~{res.RawCodebaseTokens:N0} tokens**; this Knowledge Graph compresses the structural map by **~{estSavings}%**");
+        if (includeSourceCode)
+        {
+            sb.AppendLine($"- **Content Mode**: **Merged Knowledge Graph + Full Implementation Source Code**");
+        }
+        else
+        {
+            sb.AppendLine($"- **Token Efficiency**: Raw codebase is **~{res.RawCodebaseTokens:N0} tokens**; this Knowledge Graph compresses the structural map by **~{estSavings}%**");
+        }
         sb.AppendLine();
 
         // God Nodes Table
@@ -837,8 +909,83 @@ public static class KnowledgeGraphService
             sb.AppendLine();
         }
 
+        // Optional full source code implementation section
+        if (includeSourceCode && !string.IsNullOrEmpty(wsRoot))
+        {
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.AppendLine("## Full Source Code Implementation & Classes");
+            sb.AppendLine();
+            sb.AppendLine("Below is the full source code implementation of the classes and components within this architecture network:");
+            sb.AppendLine();
+
+            var estimator = new ApproximateTokenEstimator();
+            int currentEstTokens = estimator.EstimateTokens(sb.ToString()).TokenCount;
+            int budget = maxTokens ?? int.MaxValue;
+            int codeFilesCount = 0;
+
+            var codeNodes = res.Nodes
+                .OrderByDescending(n => n.PageRank)
+                .ThenBy(n => n.RelativePath, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var node in codeNodes)
+            {
+                string abs = Path.Combine(wsRoot, node.RelativePath);
+                if (!File.Exists(abs)) continue;
+
+                string raw;
+                try { raw = File.ReadAllText(abs); }
+                catch { continue; }
+
+                string safeContent = SecurityScanner.RedactSecrets(raw);
+                int fileTokens = estimator.EstimateTokens(safeContent).TokenCount;
+
+                if (currentEstTokens + fileTokens > budget && codeFilesCount > 0)
+                {
+                    sb.AppendLine($"> ⚠️ *Token budget limit reached ({currentEstTokens:N0} tokens). Remaining {res.Nodes.Count - codeFilesCount} files omitted.*");
+                    break;
+                }
+
+                string fenceLang = MapExtensionToFenceLang(Path.GetExtension(abs));
+                string hubTag = node.IsGodNode ? " ★ [God Node]" : "";
+                sb.AppendLine($"### File: `{node.RelativePath}` ({node.Language}, {node.LineCount} lines{hubTag})");
+                sb.AppendLine();
+                sb.AppendLine($"```{fenceLang}");
+                sb.AppendLine(safeContent.TrimEnd());
+                sb.AppendLine("```");
+                sb.AppendLine();
+
+                currentEstTokens += fileTokens;
+                codeFilesCount++;
+            }
+        }
+
         return sb.ToString().TrimEnd() + Environment.NewLine;
     }
+
+    private static string MapExtensionToFenceLang(string ext) => ext.ToLowerInvariant() switch
+    {
+        ".cs" => "csharp",
+        ".ts" => "typescript",
+        ".tsx" => "tsx",
+        ".js" => "javascript",
+        ".jsx" => "jsx",
+        ".py" => "python",
+        ".java" => "java",
+        ".go" => "go",
+        ".rs" => "rust",
+        ".kt" or ".kts" => "kotlin",
+        ".php" => "php",
+        ".dart" => "dart",
+        ".cpp" or ".cc" or ".cxx" or ".hpp" or ".h" or ".c" => "cpp",
+        ".html" or ".cshtml" or ".razor" => "html",
+        ".css" or ".scss" => "css",
+        ".json" => "json",
+        ".xml" => "xml",
+        ".yaml" or ".yml" => "yaml",
+        ".sh" => "bash",
+        _ => ""
+    };
 
     private static List<string> ExtractDeclaredTypes(string content)
     {

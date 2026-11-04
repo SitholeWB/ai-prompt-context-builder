@@ -31,7 +31,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("Graphify — Codebase Graph & AI Context Builder (aipromptcontext) version 2.3.4");
+            Console.WriteLine("Graphify — Codebase Graph & AI Context Builder (aipromptcontext) version 2.3.5");
             return 0;
         }
 
@@ -237,6 +237,12 @@ public class Program
                 case "--graphify":
                     isGraphify = true;
                     break;
+                case "--include-code" or "--with-code" or "-c":
+                    config.IncludeSourceCode = true;
+                    break;
+                case "--single-file" or "--focus-file":
+                    config.FilterToTargetFile = true;
+                    break;
                 case "--output-language" or "--locale":
                     config.OutputLanguage = NextVal();
                     break;
@@ -258,6 +264,9 @@ public class Program
                 config.SaveToFile,
                 config.OutputPath,
                 config.OutputLanguage,
+                config.IncludeSourceCode,
+                config.MaxTokens,
+                config.FilterToTargetFile,
                 (pct, msg) => Console.Error.WriteLine($"PROGRESS: {pct}% - {msg}"));
 
             if (!graphRes.Success)
@@ -449,7 +458,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"Graphify — Codebase Graph & AI Context Builder (aipromptcontext) - Version 2.3.4
+        Console.WriteLine(@"Graphify — Codebase Graph & AI Context Builder (aipromptcontext) - Version 2.3.5
 Generates portable, dependency-aware AI prompts, Git diffs, and Graphify codebase knowledge graphs.
 
 Usage:

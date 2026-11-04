@@ -67,6 +67,16 @@ public static class SecurityScanner
         }
     };
 
+    public static string RedactSecrets(string content)
+    {
+        string result = content;
+        foreach (var p in Patterns)
+        {
+            result = p.Regex.Replace(result, "[REDACTED_SECRET]");
+        }
+        return result;
+    }
+
     public static List<SecretFinding> ScanForSecrets(string relativePath, string content)
     {
         var findings = new List<SecretFinding>();

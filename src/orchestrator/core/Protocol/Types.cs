@@ -318,6 +318,8 @@ public class UserConfiguration
     public bool CopyToClipboard { get; set; } = false;
     public bool SaveToFile { get; set; } = true;
     public bool OpenAfterGeneration { get; set; } = false;
+    public bool IncludeSourceCode { get; set; } = false;
+    public bool FilterToTargetFile { get; set; } = false;
 
     public string? Task { get; set; }
     public string OutputLanguage { get; set; } = "en";

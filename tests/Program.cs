@@ -1032,6 +1032,7 @@ public class Program
     private static void TestKnowledgeGraphService()
     {
         string tempRepo = Path.Combine(Path.GetTempPath(), "ai-ctx-graphify-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRepo, ".git"));
         Directory.CreateDirectory(Path.Combine(tempRepo, "core"));
         Directory.CreateDirectory(Path.Combine(tempRepo, "services"));
         try
@@ -1065,6 +1066,27 @@ public class Program
             Assert(graphRes.MermaidDiagram.Contains("flowchart LR"), "Mermaid architecture diagram generated");
             Assert(graphRes.GeneratedMarkdown.Contains("# Codebase Knowledge Graph (Graphify Architecture Map)"), "Markdown contains Graphify title");
             Assert(graphRes.GeneratedMarkdown.Contains("🇿🇦 isiZulu (Zulu)"), "Graphify Markdown respects OutputLanguage (isiZulu)");
+
+            // Verification of Merged Knowledge Graph + Source Code (New Feature)
+            var mergedRes = KnowledgeGraphService.BuildKnowledgeGraph(
+                tempRepo,
+                includeTests: false,
+                saveMarkdown: false,
+                includeSourceCode: true);
+            Assert(mergedRes.Success, "Merged Knowledge Graph + Code succeeded");
+            Assert(mergedRes.GeneratedMarkdown.Contains("## Full Source Code Implementation & Classes"), "Merged Graphify contains source code implementation header");
+            Assert(mergedRes.GeneratedMarkdown.Contains("```csharp"), "Merged Graphify contains csharp source blocks");
+
+            // Verification of Single-File Subgraph Filtering (New Feature)
+            string shippingPath = Path.Combine(tempRepo, "services", "ShippingService.cs");
+            var singleFileRes = KnowledgeGraphService.BuildKnowledgeGraph(
+                shippingPath,
+                includeTests: false,
+                saveMarkdown: false,
+                filterToTargetFile: true);
+            Assert(singleFileRes.Success, "Single-file subgraph succeeded");
+            Assert(singleFileRes.TotalFiles == 2, $"Single-file subgraph for ShippingService should contain 2 files (ShippingService + CoreHub), got {singleFileRes.TotalFiles}");
+            Assert(singleFileRes.Nodes.Any(n => n.FileName == "ShippingService.cs") && singleFileRes.Nodes.Any(n => n.FileName == "CoreHub.cs"), "Subgraph correctly includes ShippingService and CoreHub");
         }
         finally
         {

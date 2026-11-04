@@ -862,30 +862,44 @@ async function showScopeAndExportPopups(
     }
   }
 
-  const fileGraphifyItem: ScopeQuickPickItem | undefined = filePath
-    ? {
-        label: `$(type-hierarchy) Graphify: Visualize Dependencies & Architecture (${path.basename(filePath)})`,
-        description: 'Interactive Force Graph & AI Map',
-        detail: `Open interactive visual graph centered on ${path.basename(filePath)} and its dependency network`,
-        gitScope: 'graphifyFile' as any,
-      }
-    : undefined;
+  const entireCodebaseGraphifyItem: ScopeQuickPickItem = {
+    label: '$(type-hierarchy) Graphify: Entire Codebase Knowledge Graph (Interactive + AI Map)',
+    description: 'Whole Repo • PageRank Hubs & Cycles',
+    detail: 'Build an interactive zoomable Knowledge Graph & compact AI Architecture Map of the entire codebase (~95% token savings)',
+    gitScope: 'graphify' as any,
+  };
+
+  const mergedGraphifyItem: ScopeQuickPickItem = {
+    label: '$(sparkle) Graphify + Full Code Context (Merged Architecture & Classes)',
+    description: 'Macro Graph + Source Code Implementations',
+    detail: 'Combines the Graphify architecture map (Mermaid, PageRank God Nodes, cycles) with complete source code of classes',
+    gitScope: 'graphifyMerged' as any,
+  };
 
   const fileItem: ScopeQuickPickItem | undefined = filePath
     ? {
-        label: '$(file-code) Dependencies Only (No Git Changes)',
+        label: '$(file-code) Active File: Dependencies Only (No Git Changes)',
         description: `Classic AI Context (${path.basename(filePath)})`,
-        detail: 'Trace full AST dependency tree of the selected file without Git diffs',
+        detail: `Trace full AST dependency tree and extract source code of ${path.basename(filePath)} without Git diffs`,
         gitScope: 'none',
       }
     : undefined;
 
   const singleFileGitItem: ScopeQuickPickItem | undefined = filePath
     ? {
-        label: '$(diff) Single File Git Changes + Dependencies Tree',
+        label: '$(diff) Active File: Git Diff + Dependencies Tree',
         description: `Current File (${path.basename(filePath)})`,
-        detail: 'Trace dependency tree of the selected file and include its Git diff',
+        detail: `Trace dependency tree of ${path.basename(filePath)} and include staged/unstaged git changes + source code`,
         gitScope: 'file',
+      }
+    : undefined;
+
+  const fileGraphifyItem: ScopeQuickPickItem | undefined = filePath
+    ? {
+        label: `$(type-hierarchy) Graphify: Single File Subgraph (${path.basename(filePath)})`,
+        description: 'Focused Dependency Network',
+        detail: `Open interactive visual graph filtered strictly to ${path.basename(filePath)} and its upstream/downstream dependencies`,
+        gitScope: 'graphifyFile' as any,
       }
     : undefined;
 
@@ -930,12 +944,6 @@ async function showScopeAndExportPopups(
       gitScope: 'commits',
     },
     {
-      label: '$(type-hierarchy) Graphify: Entire Codebase Knowledge Graph (Interactive + AI Map)...',
-      description: 'PageRank Hubs, Cycles & Visual Map',
-      detail: 'Build an interactive zoomable Knowledge Graph & compact AI Architecture Map of the entire codebase (~95% token savings)',
-      gitScope: 'graphify',
-    },
-    {
       label: '$(comment-discussion) Draft Git Commit Message (Uncommitted Changes)...',
       description: 'AST Rules or Built-in Model',
       detail: 'Draft a Conventional Commit message from uncommitted changes and auto-fill the Git commit box',
@@ -946,18 +954,21 @@ async function showScopeAndExportPopups(
   const scopeItems: ScopeQuickPickItem[] = [];
   if (gitFirst) {
     scopeItems.push(...gitItems);
+    scopeItems.push(entireCodebaseGraphifyItem);
+    scopeItems.push(mergedGraphifyItem);
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
     if (fileItem) scopeItems.push(fileItem);
     if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
     if (cursorItem) scopeItems.push(cursorItem);
   } else {
-    if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
+    // Entire Codebase is #1 for Graphify, followed by Merged Graphify, then file options
+    scopeItems.push(entireCodebaseGraphifyItem);
+    scopeItems.push(mergedGraphifyItem);
     if (fileItem) scopeItems.push(fileItem);
     if (singleFileGitItem) scopeItems.push(singleFileGitItem);
+    if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
     if (cursorItem) scopeItems.push(cursorItem);
-    const codebaseGraphify = gitItems.find((i) => i.gitScope === 'graphify');
-    if (codebaseGraphify) scopeItems.push(codebaseGraphify);
-    scopeItems.push(...gitItems.filter((i) => i.gitScope !== 'graphify'));
+    scopeItems.push(...gitItems);
   }
 
   let chosenScope = preselectedScope;
@@ -987,8 +998,11 @@ async function showScopeAndExportPopups(
   let compareBranch: string | undefined;
   let commitCount: number | undefined;
 
-  if ((chosenScope as string) === 'graphifyFile') {
-    await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined);
+  if ((chosenScope as string) === 'graphifyMerged') {
+    await promptAndRunGraphify(filePath, undefined, true);
+    return;
+  } else if ((chosenScope as string) === 'graphifyFile') {
+    await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined, false, true);
     return;
   } else if ((chosenScope as string) === 'symbol') {
     const targetPath = filePath || workspaceFolder || '';
@@ -2046,7 +2060,12 @@ function httpPostJson(url: string, bodyObj: any, timeoutMs: number): Promise<any
   });
 }
 
-async function promptAndRunGraphify(filePath?: string, focusFile?: string) {
+async function promptAndRunGraphify(
+  filePath?: string,
+  focusFile?: string,
+  includeCodeDefault: boolean = false,
+  filterToTargetDefault: boolean = false
+) {
   const workspaceFolder =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ||
     (filePath ? path.dirname(filePath) : undefined);
@@ -2057,48 +2076,78 @@ async function promptAndRunGraphify(filePath?: string, focusFile?: string) {
   }
 
   // Step 1: Select Graphify Scope
-  const scopePick = await vscode.window.showQuickPick(
-    [
-      ...(focusFile
-        ? [
-            {
-              label: `$(type-hierarchy) Focus on ${focusFile} & Transitive Dependencies`,
-              description: 'Targeted Dependency Network',
-              detail: `Builds the whole Knowledge Graph and automatically highlights, centers and inspects ${focusFile}`,
-              includeTests: false,
-              gitFlag: '',
-            },
-          ]
-        : []),
-      {
-        label: '$(type-hierarchy) Entire Codebase (Production Source Files)',
-        description: 'Recommended • Fast Whole-Repo AST Graph',
-        detail: 'Indexes all source files across the codebase, computes PageRank God Nodes, circular cycles & domain clusters',
-        includeTests: false,
-        gitFlag: '',
-      },
-      {
-        label: '$(git-merge) Entire Codebase + Highlight Uncommitted Git Changes',
-        description: 'Git-Aware Architecture Graph',
-        detail: 'Builds the whole codebase graph and highlights all uncommitted/modified files in emerald green',
-        includeTests: false,
-        gitFlag: '--git',
-      },
-      {
-        label: '$(beaker) Entire Codebase + Test Files',
-        description: 'Include Unit & Integration Tests',
-        detail: 'Includes test files and fixtures in the Knowledge Graph',
-        includeTests: true,
-        gitFlag: '',
-      },
-    ],
+  interface GraphifyScopeItem extends vscode.QuickPickItem {
+    includeTests: boolean;
+    gitFlag: string;
+    includeCode: boolean;
+    filterToTarget: boolean;
+  }
+
+  const scopeItems: GraphifyScopeItem[] = [
     {
+      label: '$(type-hierarchy) Entire Codebase (Production Source Files)',
+      description: 'Recommended • Fast Whole-Repo AST Graph',
+      detail: 'Indexes all source files across the codebase, computes PageRank God Nodes, circular cycles & domain clusters',
+      includeTests: false,
+      gitFlag: '',
+      includeCode: includeCodeDefault,
+      filterToTarget: false,
+    },
+    {
+      label: '$(sparkle) Entire Codebase + Full Source Code Context (Merged Architecture & Classes)',
+      description: 'Macro Graph + Source Code Implementations',
+      detail: 'Builds the knowledge graph and embeds full source code of classes directly into the Markdown',
+      includeTests: false,
+      gitFlag: '',
+      includeCode: true,
+      filterToTarget: false,
+    },
+    {
+      label: '$(git-merge) Entire Codebase + Highlight Uncommitted Git Changes',
+      description: 'Git-Aware Architecture Graph',
+      detail: 'Builds the whole codebase graph and highlights all uncommitted/modified files in emerald green',
+      includeTests: false,
+      gitFlag: '--git',
+      includeCode: includeCodeDefault,
+      filterToTarget: false,
+    },
+    {
+      label: '$(beaker) Entire Codebase + Test Files',
+      description: 'Include Unit & Integration Tests',
+      detail: 'Includes test files and fixtures in the Knowledge Graph',
+      includeTests: true,
+      gitFlag: '',
+      includeCode: includeCodeDefault,
+      filterToTarget: false,
+    },
+  ];
+
+  if (filePath) {
+    const baseName = path.basename(filePath);
+    scopeItems.push({
+      label: `$(type-hierarchy) Single File Subgraph: Focus strictly on ${baseName} & Transitive Dependencies`,
+      description: 'Filtered Dependency Network',
+      detail: `Filters the Knowledge Graph strictly to ${baseName} and its callers/dependencies`,
+      includeTests: false,
+      gitFlag: '',
+      includeCode: includeCodeDefault,
+      filterToTarget: true,
+    });
+  }
+
+  let scopePick: GraphifyScopeItem | undefined;
+  if (filterToTargetDefault && filePath) {
+    scopePick = scopeItems.find((s) => s.filterToTarget);
+  }
+
+  if (!scopePick) {
+    scopePick = await vscode.window.showQuickPick<GraphifyScopeItem>(scopeItems, {
       title: focusFile
         ? `Graphify: ${focusFile} — Step 1/2: Select Scope`
         : 'Graphify Knowledge Graph — Step 1/2: Select Codebase Scope',
       placeHolder: 'Choose which files to include in the Knowledge Graph',
-    }
-  );
+    });
+  }
   if (!scopePick) return;
 
   // Step 2: Select Output Mode
@@ -2106,9 +2155,13 @@ async function promptAndRunGraphify(filePath?: string, focusFile?: string) {
   const modePick = await vscode.window.showQuickPick(
     [
       {
-        label: '$(graph) Interactive Visual Graph + AI Knowledge Map Markdown',
+        label: scopePick.includeCode
+          ? '$(graph) Interactive Visual Graph + Merged AI Knowledge Map & Code'
+          : '$(graph) Interactive Visual Graph + AI Knowledge Map Markdown',
         description: `Recommended • ${activeLang.flag} ${activeLang.nativeName}`,
-        detail: 'Opens the interactive zoomable Graphify Visualizer in VS Code AND saves codebase-knowledge-graph.md (~95% token savings)',
+        detail: scopePick.includeCode
+          ? 'Opens the interactive Graphify Visualizer AND saves codebase-knowledge-graph.md with merged classes'
+          : 'Opens the interactive zoomable Graphify Visualizer in VS Code AND saves codebase-knowledge-graph.md (~95% token savings)',
         openVisualizer: true,
         saveMarkdown: true,
       },
@@ -2154,6 +2207,12 @@ async function promptAndRunGraphify(filePath?: string, focusFile?: string) {
         '--save',
         modePick.saveMarkdown ? 'true' : 'false',
       ];
+      if (scopePick.includeCode) {
+        args.push('--include-code');
+      }
+      if (scopePick.filterToTarget && filePath) {
+        args.push('--file', filePath, '--single-file');
+      }
       if (scopePick.gitFlag) {
         args.push(scopePick.gitFlag);
       }
