@@ -3010,12 +3010,17 @@ function buildGraphifyWebviewHtml(graphRes: any, initialFocusFile?: string): str
 
   const initFocus = ${JSON.stringify(initialFocusFile || '')};
   if (initFocus) {
-    document.getElementById('searchInput').value = initFocus;
-    searchQuery = initFocus.trim();
-    const targetMatch = (data.nodes || []).find(n => n.fileName.toLowerCase() === initFocus.toLowerCase() || n.relativePath.toLowerCase().endsWith(initFocus.toLowerCase()));
+    const targetMatch = (data.nodes || []).find(n =>
+      n.fileName.toLowerCase() === initFocus.toLowerCase() ||
+      n.relativePath.toLowerCase().endsWith(initFocus.toLowerCase()) ||
+      n.id.toLowerCase().endsWith(initFocus.toLowerCase())
+    );
     if (targetMatch) {
-      selectedNode = targetMatch;
-      showInspector(targetMatch);
+      selectNode(targetMatch);
+      camX = -targetMatch.x * camScale;
+      camY = -targetMatch.y * camScale;
+    } else if (selectedNode) {
+      selectNode(selectedNode);
     }
     simTicks = 200;
   } else if (selectedNode) {

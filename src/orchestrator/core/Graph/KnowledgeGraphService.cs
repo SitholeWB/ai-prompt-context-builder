@@ -113,15 +113,20 @@ public static class KnowledgeGraphService
         bool includeSourceCode = false,
         int? maxTokens = null,
         bool filterToTargetFile = false,
-        Action<int, string>? progressCallback = null)
+        Action<int, string>? progressCallback = null,
+        string? targetFilePath = null)
     {
         try
         {
             progressCallback?.Invoke(5, "Discovering workspace & indexing source files...");
 
-            string fullTarget = Path.GetFullPath(workspaceOrTargetPath);
-            var discovered = WorkspaceDiscovery.Discover(fullTarget, Directory.Exists(fullTarget) ? fullTarget : null);
-            string wsRoot = Directory.Exists(fullTarget) ? fullTarget : discovered.WorkspaceRoot;
+            string? targetFile = !string.IsNullOrWhiteSpace(targetFilePath) && File.Exists(targetFilePath)
+                ? Path.GetFullPath(targetFilePath)
+                : (File.Exists(workspaceOrTargetPath) ? Path.GetFullPath(workspaceOrTargetPath) : null);
+
+            string fullTarget = targetFile ?? Path.GetFullPath(workspaceOrTargetPath);
+            var discovered = WorkspaceDiscovery.Discover(fullTarget, Directory.Exists(fullTarget) ? fullTarget : (Directory.Exists(workspaceOrTargetPath) ? Path.GetFullPath(workspaceOrTargetPath) : null));
+            string wsRoot = Directory.Exists(fullTarget) ? fullTarget : (Directory.Exists(workspaceOrTargetPath) ? Path.GetFullPath(workspaceOrTargetPath) : discovered.WorkspaceRoot);
             string wsName = Path.GetFileName(wsRoot.TrimEnd('/', '\\'));
             if (string.IsNullOrEmpty(wsName)) wsName = "Workspace";
 
@@ -134,7 +139,7 @@ public static class KnowledgeGraphService
 
             if (gitScope != GitScopeMode.None)
             {
-                var gitRes = GitDiffService.ResolveGitChanges(wsRoot, gitScope, File.Exists(fullTarget) ? fullTarget : null, gitCompareTarget, gitCommitCount);
+                var gitRes = GitDiffService.ResolveGitChanges(wsRoot, gitScope, targetFile, gitCompareTarget, gitCommitCount);
                 scopeDesc = $"Codebase Knowledge Graph ({gitRes.ScopeDescription})";
                 foreach (var absMod in gitRes.ModifiedAbsolutePaths)
                 {
@@ -142,9 +147,9 @@ public static class KnowledgeGraphService
                     modifiedRelPaths.Add(relMod);
                 }
             }
-            else if (File.Exists(fullTarget))
+            else if (targetFile != null)
             {
-                string relFocus = Path.GetRelativePath(wsRoot, fullTarget).Replace('\\', '/');
+                string relFocus = Path.GetRelativePath(wsRoot, targetFile).Replace('\\', '/');
                 modifiedRelPaths.Add(relFocus);
                 scopeDesc = $"Codebase Knowledge Graph (Focused on {relFocus})";
             }
@@ -379,9 +384,9 @@ public static class KnowledgeGraphService
             }
 
             // Optional single file subgraph filter: include the target file and all its transitive dependencies & callers
-            if (filterToTargetFile && File.Exists(fullTarget))
+            if (filterToTargetFile && targetFile != null)
             {
-                string relFocus = Path.GetRelativePath(wsRoot, fullTarget).Replace('\\', '/');
+                string relFocus = Path.GetRelativePath(wsRoot, targetFile).Replace('\\', '/');
                 var reachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { relFocus };
 
                 // Forward (Dependencies): nodes reachable from target
@@ -493,7 +498,7 @@ public static class KnowledgeGraphService
                 OrphanFiles = orphans,
                 MermaidDiagram = mermaid,
                 IncludesSourceCode = includeSourceCode,
-                FocusedFile = File.Exists(fullTarget) ? Path.GetRelativePath(wsRoot, fullTarget).Replace('\\', '/') : null,
+                FocusedFile = targetFile != null ? Path.GetRelativePath(wsRoot, targetFile).Replace('\\', '/') : null,
             };
 
             string markdown = RenderKnowledgeGraphMarkdown(result, outputLanguage, includeSourceCode, maxTokens, wsRoot);
