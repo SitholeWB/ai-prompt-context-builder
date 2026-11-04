@@ -54,7 +54,7 @@ public class DependencyGraph
             AnalysisLevel = node.AnalysisLevel,
             DisplayName = node.DisplayName,
             QualifiedName = node.QualifiedName,
-            RelativePath = node.RelativePath,
+            RelativePath = (node.RelativePath ?? "").Replace('\\', '/'),
             ProjectOrPackage = node.ProjectOrPackage,
             SourceAvailable = node.SourceAvailable,
             Generated = node.Generated,
@@ -118,7 +118,8 @@ public class DependencyGraph
 
     public IReadOnlyList<GraphNode> GetNodesByFile(string relativePath)
     {
-        if (_fileToNodeIndex.TryGetValue(relativePath, out var ids))
+        string normRel = (relativePath ?? "").Replace('\\', '/');
+        if (_fileToNodeIndex.TryGetValue(normRel, out var ids))
         {
             return ids.Select(id => _nodes.GetValueOrDefault(id)).Where(n => n != null).ToList()!;
         }

@@ -1250,6 +1250,37 @@ struct EngineConfig {
                 Assert(!string.IsNullOrEmpty(result.GeneratedMarkdown), $"Expected markdown output for {relFile}");
                 Assert(result.GeneratedMarkdown.Contains(relFile), $"Markdown output should reference file {relFile}");
             }
+
+            // Also test explicit symbol targeting across all languages for interfaces, enums, structs, traits
+            var symbolTargetTests = new (string File, string Symbol)[]
+            {
+                ("CommonTypes.cs", "IOrderProcessor"),
+                ("types.ts", "IPriorityTask"),
+                ("constants.py", "Theme"),
+                ("types.go", "Reader"),
+                ("DataTypes.java", "IAccessAuthorizer"),
+                ("models.rs", "SocketHandler"),
+                ("Contracts.php", "StatusCheckerInterface"),
+                ("state.dart", "ViewState"),
+                ("types.hpp", "EngineConfig")
+            };
+
+            foreach (var (relFile, sym) in symbolTargetTests)
+            {
+                var fullPath = Path.Combine(tempRepo, relFile);
+                var config = new UserConfiguration
+                {
+                    RootPath = fullPath,
+                    WorkspacePath = tempRepo,
+                    RootSymbol = sym,
+                    SaveToFile = false
+                };
+
+                var result = await orchestrator.GenerateContextAsync(config);
+                Assert(result.Success, $"Symbol extraction failed for {relFile} symbol {sym}: [{result.ErrorCode}] {result.ErrorMessage}");
+                Assert(!string.IsNullOrEmpty(result.GeneratedMarkdown), $"Expected markdown output for {relFile} symbol {sym}");
+                Assert(result.GeneratedMarkdown.Contains(sym), $"Markdown should contain targeted symbol {sym}");
+            }
         }
         finally
         {

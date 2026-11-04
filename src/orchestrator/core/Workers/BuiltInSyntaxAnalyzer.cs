@@ -240,6 +240,62 @@ public static class BuiltInSyntaxAnalyzer
                     }
                 }
             }
+
+            // 7. Discovered Python classes, enums and functions
+            var pyClassMatches = Regex.Matches(content, @"^\s*class\s+([A-Za-z0-9_]+)(?:\(([^)]*)\))?\s*:", RegexOptions.Multiline);
+            foreach (Match cm in pyClassMatches)
+            {
+                string clsName = cm.Groups[1].Value;
+                string bases = cm.Groups[2].Success ? cm.Groups[2].Value : "";
+                NodeKind kind = bases.Contains("Enum") ? NodeKind.Enum : NodeKind.Class;
+
+                string clsId = $"type:{rel}#{clsName}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = clsId,
+                    Kind = kind,
+                    Language = "Python",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = clsName,
+                    QualifiedName = clsName,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = clsId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
+
+            var pyDefMatches = Regex.Matches(content, @"^\s*(?:async\s+)?def\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+            foreach (Match dm in pyDefMatches)
+            {
+                string fnName = dm.Groups[1].Value;
+                string fnId = $"func:{rel}#{fnName}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = fnId,
+                    Kind = NodeKind.Function,
+                    Language = "Python",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = fnName,
+                    QualifiedName = fnName,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = fnId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
         }
 
         return fragment;
@@ -434,6 +490,69 @@ public static class BuiltInSyntaxAnalyzer
                     LinkAndQueue(fileNodeId, targetFile, RelationshipType.Interface, fragment, queue, visited, workspaceRoot);
                 }
             }
+        }
+
+        // 9. Discovered declared types & functions (classes, interfaces, enums, types, functions)
+        var typeMatches = Regex.Matches(content, @"^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?(class|interface|enum|type)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+        foreach (Match m in typeMatches)
+        {
+            string kw = m.Groups[1].Value;
+            string name = m.Groups[2].Value;
+            NodeKind kind = kw switch
+            {
+                "interface" => NodeKind.Interface,
+                "enum" => NodeKind.Enum,
+                "type" => NodeKind.Type,
+                _ => NodeKind.Class
+            };
+            string rel = Path.GetRelativePath(workspaceRoot, curFile).Replace('\\', '/');
+            string nodeId = $"type:{rel}#{name}";
+            fragment.Nodes.Add(new GraphNode
+            {
+                Id = nodeId,
+                Kind = kind,
+                Language = Path.GetExtension(curFile).EndsWith("ts") || Path.GetExtension(curFile).EndsWith("tsx") ? "TypeScript" : "JavaScript",
+                AnalysisLevel = CapabilityLevel.SyntaxAware,
+                DisplayName = name,
+                QualifiedName = name,
+                RelativePath = rel,
+                SourceAvailable = true
+            });
+            fragment.Edges.Add(new GraphEdge
+            {
+                SourceNodeId = fileNodeId,
+                TargetNodeId = nodeId,
+                Relationship = RelationshipType.Export,
+                Confidence = Confidence.Verified,
+                AnalysisLevel = CapabilityLevel.SyntaxAware
+            });
+        }
+
+        var fnMatches = Regex.Matches(content, @"^\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+        foreach (Match m in fnMatches)
+        {
+            string fnName = m.Groups[1].Value;
+            string rel = Path.GetRelativePath(workspaceRoot, curFile).Replace('\\', '/');
+            string fnId = $"func:{rel}#{fnName}";
+            fragment.Nodes.Add(new GraphNode
+            {
+                Id = fnId,
+                Kind = NodeKind.Function,
+                Language = Path.GetExtension(curFile).EndsWith("ts") || Path.GetExtension(curFile).EndsWith("tsx") ? "TypeScript" : "JavaScript",
+                AnalysisLevel = CapabilityLevel.SyntaxAware,
+                DisplayName = fnName,
+                QualifiedName = fnName,
+                RelativePath = rel,
+                SourceAvailable = true
+            });
+            fragment.Edges.Add(new GraphEdge
+            {
+                SourceNodeId = fileNodeId,
+                TargetNodeId = fnId,
+                Relationship = RelationshipType.Export,
+                Confidence = Confidence.Verified,
+                AnalysisLevel = CapabilityLevel.SyntaxAware
+            });
         }
     }
 

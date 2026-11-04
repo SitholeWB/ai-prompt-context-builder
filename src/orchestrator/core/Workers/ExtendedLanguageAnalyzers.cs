@@ -144,6 +144,66 @@ public static class ExtendedLanguageAnalyzers
                     }
                 }
             }
+
+            // Discovered declarations (structs, enums, traits, functions)
+            var typeMatches = Regex.Matches(content, @"^\s*(?:pub(?:\([^)]+\))?\s+)?(struct|enum|trait)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+            foreach (Match m in typeMatches)
+            {
+                string kw = m.Groups[1].Value;
+                string name = m.Groups[2].Value;
+                NodeKind kind = kw switch
+                {
+                    "trait" => NodeKind.Interface,
+                    "enum" => NodeKind.Enum,
+                    _ => NodeKind.Struct
+                };
+                string nodeId = $"type:{rel}#{name}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = nodeId,
+                    Kind = kind,
+                    Language = "Rust",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = name,
+                    QualifiedName = name,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = nodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
+
+            var fnMatches = Regex.Matches(content, @"^\s*(?:pub(?:\([^)]+\))?\s+)?fn\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+            foreach (Match m in fnMatches)
+            {
+                string fnName = m.Groups[1].Value;
+                string fnId = $"func:{rel}#{fnName}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = fnId,
+                    Kind = NodeKind.Function,
+                    Language = "Rust",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = fnName,
+                    QualifiedName = fnName,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = fnId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
         }
 
         return fragment;
@@ -235,6 +295,67 @@ public static class ExtendedLanguageAnalyzers
                         AddEdgeAndQueue(fragment, fileNodeId, mf, RelationshipType.Implementation, workspaceRoot, visited, queue);
                     }
                 }
+            }
+
+            // Discovered declarations (classes, interfaces, enum classes, data classes, functions)
+            var typeMatches = Regex.Matches(content, @"^\s*(?:open|abstract|sealed|data|enum|internal|public|private|\s)*(class|interface)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+            foreach (Match m in typeMatches)
+            {
+                string kw = m.Groups[1].Value;
+                string name = m.Groups[2].Value;
+                bool isEnum = Regex.IsMatch(m.Value, @"\benum\s+class\b");
+                bool isData = Regex.IsMatch(m.Value, @"\bdata\s+class\b");
+
+                NodeKind kind = isEnum ? NodeKind.Enum :
+                                isData ? NodeKind.Record :
+                                kw == "interface" ? NodeKind.Interface : NodeKind.Class;
+
+                string nodeId = $"type:{rel}#{name}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = nodeId,
+                    Kind = kind,
+                    Language = "Kotlin",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = name,
+                    QualifiedName = name,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = nodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
+
+            var funMatches = Regex.Matches(content, @"^\s*(?:fun)\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+            foreach (Match m in funMatches)
+            {
+                string fnName = m.Groups[1].Value;
+                string fnId = $"func:{rel}#{fnName}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = fnId,
+                    Kind = NodeKind.Function,
+                    Language = "Kotlin",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = fnName,
+                    QualifiedName = fnName,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = fnId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
             }
         }
 
@@ -360,6 +481,66 @@ public static class ExtendedLanguageAnalyzers
                     }
                 }
             }
+
+            // Discovered declarations (classes, interfaces, enums, traits, functions)
+            var typeMatches = Regex.Matches(content, @"^\s*(?:abstract\s+|final\s+|readonly\s+)*(class|interface|enum|trait)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+            foreach (Match m in typeMatches)
+            {
+                string kw = m.Groups[1].Value;
+                string name = m.Groups[2].Value;
+                NodeKind kind = kw switch
+                {
+                    "interface" or "trait" => NodeKind.Interface,
+                    "enum" => NodeKind.Enum,
+                    _ => NodeKind.Class
+                };
+                string nodeId = $"type:{rel}#{name}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = nodeId,
+                    Kind = kind,
+                    Language = "Php",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = name,
+                    QualifiedName = name,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = nodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
+
+            var fnMatches = Regex.Matches(content, @"^\s*function\s+([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+            foreach (Match m in fnMatches)
+            {
+                string fnName = m.Groups[1].Value;
+                string fnId = $"func:{rel}#{fnName}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = fnId,
+                    Kind = NodeKind.Function,
+                    Language = "Php",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = fnName,
+                    QualifiedName = fnName,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = fnId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
         }
 
         return fragment;
@@ -484,6 +665,40 @@ public static class ExtendedLanguageAnalyzers
                     }
                 }
             }
+
+            // Discovered declarations (classes, abstract classes, enums, mixins)
+            var typeMatches = Regex.Matches(content, @"^\s*(?:abstract\s+)?(class|enum|mixin)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+            foreach (Match m in typeMatches)
+            {
+                string kw = m.Groups[1].Value;
+                string name = m.Groups[2].Value;
+                NodeKind kind = kw switch
+                {
+                    "enum" => NodeKind.Enum,
+                    "mixin" => NodeKind.Interface,
+                    _ => NodeKind.Class
+                };
+                string nodeId = $"type:{rel}#{name}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = nodeId,
+                    Kind = kind,
+                    Language = "Dart",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = name,
+                    QualifiedName = name,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = nodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
         }
 
         return fragment;
@@ -591,6 +806,37 @@ public static class ExtendedLanguageAnalyzers
                         AddEdgeAndQueue(fragment, fileNodeId, mf, RelationshipType.BaseType, workspaceRoot, visited, queue);
                     }
                 }
+            }
+
+            // Discovered declarations (classes, structs, enums)
+            var typeMatches = Regex.Matches(content, @"^\s*(?:class|struct|enum(?:\s+class)?)\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
+            foreach (Match m in typeMatches)
+            {
+                string matchedText = m.Value;
+                string name = m.Groups[1].Value;
+                NodeKind kind = matchedText.Contains("enum") ? NodeKind.Enum :
+                                matchedText.Contains("struct") ? NodeKind.Struct : NodeKind.Class;
+
+                string nodeId = $"type:{rel}#{name}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = nodeId,
+                    Kind = kind,
+                    Language = "Cpp",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = name,
+                    QualifiedName = name,
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = nodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
             }
         }
 

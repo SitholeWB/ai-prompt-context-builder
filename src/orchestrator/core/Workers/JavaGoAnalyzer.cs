@@ -264,21 +264,41 @@ public static class JavaGoAnalyzer
                 }
             }
 
-            // Discovered classes/interfaces
-            var typeMatches = Regex.Matches(content, @"\b(?:class|interface|record|enum)\s+([A-Za-z0-9_]+)");
+            // Discovered classes/interfaces/enums/records
+            var pkgMatch = Regex.Match(content, @"^\s*package\s+([A-Za-z0-9_.]+);", RegexOptions.Multiline);
+            string currentPkg = pkgMatch.Success ? pkgMatch.Groups[1].Value : "";
+            var typeMatches = Regex.Matches(content, @"\b(class|interface|record|enum)\s+([A-Za-z0-9_]+)");
             foreach (Match m in typeMatches)
             {
-                string typeName = m.Groups[1].Value;
+                string kw = m.Groups[1].Value;
+                string typeName = m.Groups[2].Value;
+                NodeKind kind = kw switch
+                {
+                    "interface" => NodeKind.Interface,
+                    "record" => NodeKind.Record,
+                    "enum" => NodeKind.Enum,
+                    _ => NodeKind.Class
+                };
+                string typeNodeId = $"type:{rel}#{typeName}";
                 fragment.Nodes.Add(new GraphNode
                 {
-                    Id = $"type:{rel}#{typeName}",
-                    Kind = NodeKind.Class,
+                    Id = typeNodeId,
+                    Kind = kind,
                     Language = "Java",
                     AnalysisLevel = CapabilityLevel.SyntaxAware,
                     DisplayName = typeName,
-                    QualifiedName = typeName,
+                    QualifiedName = string.IsNullOrEmpty(currentPkg) ? typeName : $"{currentPkg}.{typeName}",
                     RelativePath = rel,
                     SourceAvailable = true
+                });
+
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = typeNodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
                 });
             }
         }
@@ -408,20 +428,60 @@ public static class JavaGoAnalyzer
             }
 
             // Struct and interface declarations
-            var structMatches = Regex.Matches(content, @"type\s+([A-Za-z0-9_]+)\s+(?:struct|interface)");
+            var structMatches = Regex.Matches(content, @"type\s+([A-Za-z0-9_]+)\s+(struct|interface)");
             foreach (Match m in structMatches)
             {
                 string structName = m.Groups[1].Value;
+                string typeKindStr = m.Groups[2].Value;
+                NodeKind kind = typeKindStr == "interface" ? NodeKind.Interface : NodeKind.Struct;
+                string typeNodeId = $"type:{rel}#{structName}";
                 fragment.Nodes.Add(new GraphNode
                 {
-                    Id = $"type:{rel}#{structName}",
-                    Kind = NodeKind.Struct,
+                    Id = typeNodeId,
+                    Kind = kind,
                     Language = "Go",
                     AnalysisLevel = CapabilityLevel.SyntaxAware,
                     DisplayName = structName,
                     QualifiedName = $"{currentPkg}.{structName}",
                     RelativePath = rel,
                     SourceAvailable = true
+                });
+
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = typeNodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
+                });
+            }
+
+            // Top-level Go functions & methods
+            var funcMatches = Regex.Matches(content, @"^func\s+(?:\([^)]+\)\s+)?([A-Za-z0-9_]+)\s*\(", RegexOptions.Multiline);
+            foreach (Match m in funcMatches)
+            {
+                string fnName = m.Groups[1].Value;
+                string fnNodeId = $"func:{rel}#{fnName}";
+                fragment.Nodes.Add(new GraphNode
+                {
+                    Id = fnNodeId,
+                    Kind = NodeKind.Function,
+                    Language = "Go",
+                    AnalysisLevel = CapabilityLevel.SyntaxAware,
+                    DisplayName = fnName,
+                    QualifiedName = $"{currentPkg}.{fnName}",
+                    RelativePath = rel,
+                    SourceAvailable = true
+                });
+
+                fragment.Edges.Add(new GraphEdge
+                {
+                    SourceNodeId = fileNodeId,
+                    TargetNodeId = fnNodeId,
+                    Relationship = RelationshipType.Export,
+                    Confidence = Confidence.Verified,
+                    AnalysisLevel = CapabilityLevel.SyntaxAware
                 });
             }
         }
