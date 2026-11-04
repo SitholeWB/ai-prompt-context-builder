@@ -2,7 +2,7 @@
 
 <img src="media/icon.png" width="128" height="128" alt="AI Prompt Context Builder Icon" style="border-radius: 24px;" />
 
-# 🧠 AI Context Builder, Prompt Generator & Graphify Knowledge Graph (`aipromptcontext`)
+# 🕸️ Graphify — Codebase Graph & AI Context Builder
 
 **Graphify your entire codebase into an interactive AST Knowledge Graph, generate dependency-aware AI prompts & Git diffs, and draft commits — 100% self-contained.**
 
