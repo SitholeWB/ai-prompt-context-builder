@@ -193,18 +193,23 @@ public class ContextOrchestrator
             };
         }
 
+        // 7. Importance Scoring
+        // If a file has multiple declarations (e.g. constants.py, types.go, CommonEnums.cs) and no explicit --symbol was passed,
+        // treat all root declarations and the file itself as multi-roots so the entire file & its dependencies are included cleanly!
+        var rootNodeIds = new List<string>();
         if (!rootTarget.IsSingleCandidate && string.IsNullOrEmpty(config.RootSymbol))
         {
-            return new OrchestrationResult
-            {
-                Success = false,
-                ErrorCode = "MultipleRootSymbols",
-                ErrorMessage = $"Multiple eligible root symbols found in '{rootRelPath}'. Please specify one with --symbol: {string.Join(", ", rootTarget.Candidates)}"
-            };
-        }
+            var fileNode = rootFileNodes.FirstOrDefault(n => n.Kind == NodeKind.File);
+            if (fileNode != null) rootNodeIds.Add(fileNode.Id);
+            rootNodeIds.AddRange(rootFileNodes.Where(n => n.Kind is NodeKind.Class or NodeKind.Interface or NodeKind.Enum or NodeKind.Struct or NodeKind.Record or NodeKind.Function).Select(n => n.Id));
+            if (rootNodeIds.Count == 0) rootNodeIds.Add(rootTarget.RootNodeId);
 
-        // 7. Importance Scoring
-        ImportanceScorer.CalculateScores(graph, rootTarget.RootNodeId);
+            ImportanceScorer.CalculateScores(graph, rootNodeIds);
+        }
+        else
+        {
+            ImportanceScorer.CalculateScores(graph, rootTarget.RootNodeId);
+        }
 
         progressCallback?.Invoke(70, "Calculating importance scores & secret scanning");
 

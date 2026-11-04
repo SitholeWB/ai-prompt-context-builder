@@ -72,6 +72,7 @@ public class Program
         RunTest("40. Deterministic AST + Diff Git Commit Message Drafter (No AI)", TestGitCommitDraftService);
         await RunTestAsync("41. Multi-Language Localization: isiZulu, Español & 10-Language Prompt Output", TestMultiLanguageOutputLocalization);
         RunTest("42. Graphify Knowledge Graph: PageRank God Nodes, Tarjan Cycles & AI Map", TestKnowledgeGraphService);
+        await RunTestAsync("43. Cross-Language Type Matrix: Interfaces, Enums, Statics, Structs & Multi-Symbol Files", TestCrossLanguageTypeMatrix);
 
         Console.WriteLine("=================================================");
         Console.WriteLine($"Tests Completed: {_passed} Passed, {_failed} Failed");
@@ -1088,5 +1089,171 @@ public class Program
     private static void Assert(bool condition, string message)
     {
         if (!condition) throw new Exception(message);
+    }
+
+    private static async Task TestCrossLanguageTypeMatrix()
+    {
+        var tempRepo = Path.Combine(Path.GetTempPath(), "test_type_matrix_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRepo);
+
+        try
+        {
+            // 1. C# Multi-symbol file with Enum, Interface, Struct, Record, Static Class
+            var csharpFile = Path.Combine(tempRepo, "CommonTypes.cs");
+            File.WriteAllText(csharpFile, @"
+namespace MyApp;
+
+public enum OrderStatus { Pending, Approved, Rejected }
+public interface IOrderProcessor { void Process(); }
+public struct OrderCoordinate { public double X; public double Y; }
+public record OrderSummary(string Id, decimal Total);
+public static class OrderFormatter { public static string Format(OrderSummary s) => s.Id; }
+");
+
+            // 2. TypeScript file with Enum, Interface, Static class
+            var tsFile = Path.Combine(tempRepo, "types.ts");
+            File.WriteAllText(tsFile, @"
+export enum Priority { Low, Medium, High }
+export interface IPriorityTask { id: string; priority: Priority; }
+export class PriorityUtils {
+    public static isUrgent(p: Priority): boolean { return p === Priority.High; }
+}
+");
+
+            // 3. Python file with Enum and Static Class (constants.py)
+            var pyFile = Path.Combine(tempRepo, "constants.py");
+            File.WriteAllText(pyFile, @"
+from enum import Enum
+
+class Theme(Enum):
+    DARK = 'dark'
+    LIGHT = 'light'
+
+class AppConfig:
+    DEFAULT_TIMEOUT = 30
+    @staticmethod
+    def is_production():
+        return True
+");
+
+            // 4. Go file with Interface and Struct (types.go)
+            var goFile = Path.Combine(tempRepo, "types.go");
+            File.WriteAllText(goFile, @"
+package store
+
+type Reader interface {
+    Read(p []byte) (n int, err error)
+}
+
+type StoreConfig struct {
+    Path string
+    Port int
+}
+");
+
+            // 5. Java file with Enum and Interface
+            var javaFile = Path.Combine(tempRepo, "DataTypes.java");
+            File.WriteAllText(javaFile, @"
+package com.example;
+
+public enum AccessLevel {
+    READ, WRITE, ADMIN
+}
+
+interface IAccessAuthorizer {
+    boolean authorize(AccessLevel level);
+}
+");
+
+            // 6. Rust file with Enum and Trait
+            var rsFile = Path.Combine(tempRepo, "models.rs");
+            File.WriteAllText(rsFile, @"
+pub enum ConnectionState {
+    Disconnected,
+    Connected,
+}
+
+pub trait SocketHandler {
+    fn handle(&self, state: ConnectionState);
+}
+");
+
+            // 7. PHP file with Enum and Interface
+            var phpFile = Path.Combine(tempRepo, "Contracts.php");
+            File.WriteAllText(phpFile, @"<?php
+namespace App\Contracts;
+
+enum StatusEnum: string {
+    case ACTIVE = 'active';
+    case INACTIVE = 'inactive';
+}
+
+interface StatusCheckerInterface {
+    public function check(StatusEnum $status): bool;
+}
+");
+
+            // 8. Dart file with Enum and Abstract Class
+            var dartFile = Path.Combine(tempRepo, "state.dart");
+            File.WriteAllText(dartFile, @"
+enum ViewState { idle, busy, error }
+
+abstract class StateNotifier {
+  void notify(ViewState state);
+}
+");
+
+            // 9. C++ header with Enum and Struct
+            var cppFile = Path.Combine(tempRepo, "types.hpp");
+            File.WriteAllText(cppFile, @"
+#pragma once
+
+enum class EngineState {
+    Stopped,
+    Running,
+};
+
+struct EngineConfig {
+    int maxRpm;
+    float temperature;
+};
+");
+
+            var orchestrator = new ContextOrchestrator();
+            orchestrator.RegisterAdapter(new DotNetAdapter());
+
+            // Test context extraction from every file without requiring --symbol flag!
+            string[] testFiles = {
+                "CommonTypes.cs",
+                "types.ts",
+                "constants.py",
+                "types.go",
+                "DataTypes.java",
+                "models.rs",
+                "Contracts.php",
+                "state.dart",
+                "types.hpp"
+            };
+
+            foreach (var relFile in testFiles)
+            {
+                var fullPath = Path.Combine(tempRepo, relFile);
+                var config = new UserConfiguration
+                {
+                    RootPath = fullPath,
+                    WorkspacePath = tempRepo,
+                    SaveToFile = false
+                };
+
+                var result = await orchestrator.GenerateContextAsync(config);
+                Assert(result.Success, $"Context extraction failed for {relFile}: [{result.ErrorCode}] {result.ErrorMessage}");
+                Assert(!string.IsNullOrEmpty(result.GeneratedMarkdown), $"Expected markdown output for {relFile}");
+                Assert(result.GeneratedMarkdown.Contains(relFile), $"Markdown output should reference file {relFile}");
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(tempRepo, true); } catch { }
+        }
     }
 }
