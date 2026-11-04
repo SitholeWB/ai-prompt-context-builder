@@ -54,28 +54,48 @@ Generate clean, dependency-aware AI prompts directly inside your editor with sin
   <img src="media/sidebar-demo.png" alt="Graphify Activity Bar Sidebar" width="49%" style="border-radius: 8px; vertical-align: top; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
 </p>
 
+<p align="center">
+  <img src="media/popup-options-demo.png" alt="Streamlined Category Popup Wizard" width="97%" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-top: 8px;" />
+</p>
+
 ### How to Use
 
-#### 1. Single Right-Click or Activity Bar Sidebar Icon (Interactive Popup Flow)
+#### 1. Single Right-Click or Activity Bar Sidebar Icon (Streamlined 2-Step Popup Flow)
 
-* Right-click any source file in the Explorer or Editor (or open the **Graphify — Codebase Graph & AI Context Builder** icon in the left Activity Bar) and click **Graphify: Codebase Graph & AI Context...**.
-* **Popup 1 — Select Context & Git Scope**:
-  * **Graphify: Entire Codebase Knowledge Graph (Interactive + AI Map)** *(Primary #1)* — Build an interactive visual graph and compact AI Architecture Map of the entire workspace with PageRank God Nodes, circular cycles, and domain clusters (~95% token savings).
-  * **Graphify + Full Code Context: Merged Architecture & Classes** *(New in v2.3.5)* — The ultimate AI prompt: combines the high-level Graphify macro architecture map (Mermaid diagram, God Nodes, cycle report) with the full source code implementations of the analyzed classes.
-  * **Active File: Dependencies Only (No Git Changes)** — Classic mode: trace the full dependency tree of the selected file and extract clean source code without Git diffs.
-  * **Active File: Git Diff + Dependencies Tree** — Trace the dependency tree of the selected file and include its unified Git diff patch.
-  * **Graphify: Single File Subgraph (`<filename>`)** — Filters the Knowledge Graph strictly to the selected file and its direct & transitive upstream/downstream dependencies.
-  * **Symbol at Cursor + Dependencies** — Automatically discovers the class/function at your cursor and extracts its focused dependency tree.
-  * **All Git Changes (Staged + Unstaged) + Dependencies Tree** — Discover all modified, added, and untracked source files in your workspace and trace their combined dependency trees.
-  * **Staged Git Changes ONLY + Dependencies Tree** — Discover only staged (`git add`) files and trace their dependency trees.
-  * **Unstaged Git Changes ONLY + Dependencies Tree** — Discover only unstaged working tree modifications and trace their dependency trees.
-  * **Compare Branch / Pull Request + Dependencies Tree...** — Pick any local or remote branch (`main`, `develop`, etc.) to compare against `HEAD` and trace the dependency trees of all PR-modified files.
-  * **Last X Commits + Dependencies Tree...** — Select the last `1`, `2`, `3`, `5`, `10`, or custom `N` commits and trace touched files.
-* **Popup 2 — Select Output Content** *(when a Git scope is selected)*:
-  * **Git Diff + Full Dependencies Tree (Recommended)** — Embeds the unified (`+` / `-`) Git diff patch (and commit log summary for PRs/commits) at the top of the Markdown file **plus** the complete source code of all modified files and their dependency trees.
-  * **Dependencies Tree Only (No Diff Text)** — Includes the complete source code of the Git-modified files and their dependency trees without the raw diff block.
-* **Popup 3 — Choose Export Mode**:
-  * **Export with Defaults** (instant one-click generation) or **Custom Options...** (configure token budget, comment stripping, depth, output destination & custom prompt task).
+Right-click any source file in the Explorer or Editor (or open the **Graphify — Codebase Graph & AI Context Builder** icon in the left Activity Bar) and click **Graphify: Codebase Graph & AI Context...**.
+
+The interactive flow guides you through **3 clearly organized action categories**:
+
+##### 🕸️ Category 1: Graphify Knowledge Graph (Visual Architecture & Codebase Map)
+* **Entire Codebase Knowledge Graph** *(Primary #1)* — Indexes the entire repository, computes PageRank God Nodes, detects circular dependency cycles, and launches the interactive visual graph canvas + saves the compact AI Architecture Map (`codebase-knowledge-graph.md`).
+* **Merged: Graphify Architecture + Full Source Code** — The ultimate AI prompt: combines the high-level Graphify macro architecture map (Mermaid diagram, God Nodes, cycle report) with the full source code implementations of all analyzed classes.
+* **Single File Subgraph (`<filename>`)** — Isolates and renders strictly the selected file and its direct/transitive callers and dependencies.
+* **Entire Codebase + Highlight Uncommitted Git Changes** — Visualizes the whole repo and illuminates all modified/uncommitted files in emerald green.
+* **Entire Codebase + Include Test Files** — Includes unit & integration test specs and fixtures.
+
+##### 📄 Category 2: AI Prompt & Context Builder (Code & AST Dependencies for LLMs)
+* **Active File: Dependencies Only (No Git Changes)** — Fast 1-click prompt: extracts AST dependency tree and full class implementations of the selected file.
+* **Active File: Git Diff + Dependencies Tree** — Includes staged/unstaged changes for this file plus upstream/downstream context.
+* **Merged: Graphify Architecture + Full Source Code** — Embeds Mermaid architecture flowchart and God Nodes table right before the full source code blocks.
+* **Symbol at Cursor + Dependencies** — Automatically discovers the class/method at your cursor and extracts its focused dependency tree.
+* **Entire Workspace / Project Scope** — Traces dependencies starting from the project boundary.
+
+##### 🌿 Category 3: Workspace Git Scopes & Commit Tools
+* **All Git Changes (Staged + Unstaged) + Dependencies Tree** — Discovers all modified/added source files and traces their combined dependencies.
+* **Staged Git Changes ONLY (`git diff --cached`)** — Discovers only staged files and traces their dependencies.
+* **Unstaged Git Changes ONLY (`git diff`)** — Discovers only unstaged working tree modifications.
+* **Compare Branch / Pull Request...** — Compare against `main`, `develop`, or origin and trace dependency trees of all PR-touched files.
+* **Last X Commits...** — Select last `1`, `2`, `3`, `5`, or custom `N` commits and trace touched files.
+* **Draft Git Commit Message...** — Conventional Commit message generator powered by AST rules or built-in model.
+
+##### Step 2: Instant Defaults vs Custom Options
+* **Export with Defaults** — Instant 1-click generation with automatic token budget and comments preserved.
+* **Custom Options...** — Fine-grained step-by-step configuration:
+  * **Token Budget limits**: `Unlimited`, `32k`, `64k`, `100k`, `128k`, `200k`, or `Custom`.
+  * **Comment Stripping**: `Preserve`, `Auto` (strip only if over budget), or `Remove`.
+  * **Traversal Depth**: `Unlimited`, `1`, `2`, `3`, `5`, or `Custom`.
+  * **Output Destination**: `Save to File`, `Copy to Clipboard`, or `Both`.
+  * **Language & Custom Prompt**: Output in 10 languages (including isiZulu, English, Spanish, etc.) and pre-populate custom task instructions for the LLM.
 
 #### 2. Right-Click Inside Code (Targeted Symbol)
 * Place your cursor on any class name, interface, method, or function.

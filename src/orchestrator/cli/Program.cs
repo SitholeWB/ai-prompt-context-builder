@@ -31,7 +31,7 @@ public class Program
 
         if (args[0] is "--version" or "-v" or "version")
         {
-            Console.WriteLine("Graphify — Codebase Graph & AI Context Builder (aipromptcontext) version 2.3.5");
+            Console.WriteLine("Graphify — Codebase Graph & AI Context Builder (aipromptcontext) version 2.3.6");
             return 0;
         }
 
@@ -458,7 +458,7 @@ public class Program
 
     private static void PrintHelp()
     {
-        Console.WriteLine(@"Graphify — Codebase Graph & AI Context Builder (aipromptcontext) - Version 2.3.5
+        Console.WriteLine(@"Graphify — Codebase Graph & AI Context Builder (aipromptcontext) - Version 2.3.6
 Generates portable, dependency-aware AI prompts, Git diffs, and Graphify codebase knowledge graphs.
 
 Usage:

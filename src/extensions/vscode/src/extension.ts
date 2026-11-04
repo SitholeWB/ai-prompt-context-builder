@@ -847,176 +847,249 @@ async function showScopeAndExportPopups(
     gitScope: GitScopeType;
   }
 
-  // Detect word / symbol at cursor if active editor is editing this file
-  let cursorSymbol: string | undefined;
-  const activeEditor = vscode.window.activeTextEditor;
-  if (activeEditor && (!filePath || activeEditor.document.uri.fsPath === filePath)) {
-    const sel = activeEditor.selection;
-    let s = activeEditor.document.getText(sel).trim();
-    if (!s) {
-      const wordRange = activeEditor.document.getWordRangeAtPosition(sel.active);
-      if (wordRange) s = activeEditor.document.getText(wordRange).trim();
+  let chosenScope: GitScopeType | undefined = preselectedScope;
+  let chosenDescription = preselectedScope ? String(preselectedScope) : '';
+  let includeGitDiff = true;
+  let compareBranch: string | undefined;
+  let commitCount: number | undefined;
+
+  // Step 1: Category Selection (when not preselected from a specific sidebar shortcut)
+  if (!chosenScope) {
+    interface CategoryQuickPickItem extends vscode.QuickPickItem {
+      category: 'graphify' | 'promptContext' | 'gitScopes';
     }
-    if (s && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)) {
-      cursorSymbol = s;
+
+    const categoryPick = await vscode.window.showQuickPick<CategoryQuickPickItem>(
+      [
+        {
+          label: '$(type-hierarchy) 🕸️ Graphify Knowledge Graph',
+          description: 'Visual Architecture & Codebase Map',
+          detail: 'Build whole-repo or single-file interactive visual graph, PageRank God Nodes, cycles & AI architecture map',
+          category: 'graphify',
+        },
+        {
+          label: '$(file-code) 📄 AI Prompt & Context Builder',
+          description: filePath ? `Extract Code (${path.basename(filePath)})` : 'Extract Code & AST Dependencies',
+          detail: 'Generate complete dependency-aware code prompts for ChatGPT, Claude & Copilot with token limits & comment rules',
+          category: 'promptContext',
+        },
+        {
+          label: '$(git-merge) 🌿 Workspace Git Scopes & Commit Tools',
+          description: 'Diffs, Branch / PR Compare & Commit Drafter',
+          detail: 'Inspect uncommitted git changes, staged files, PR branches, recent commits, and draft conventional commit messages',
+          category: 'gitScopes',
+        },
+      ],
+      {
+        title: filePath
+          ? `Graphify — Codebase Graph & AI Context: ${path.basename(filePath)}`
+          : 'Graphify — Codebase Graph & AI Context Builder',
+        placeHolder: 'Step 1/2: Select Action Category (Graphify Architecture, AI Code Context, or Git Scopes)',
+      }
+    );
+    if (!categoryPick) return;
+
+    // Sub-flow 1: Graphify Knowledge Graph
+    if (categoryPick.category === 'graphify') {
+      interface GraphifyChoiceItem extends vscode.QuickPickItem {
+        mode: 'codebase' | 'merged' | 'subgraph' | 'gitHighlight' | 'tests';
+      }
+
+      const graphifyChoices: GraphifyChoiceItem[] = [
+        {
+          label: '$(type-hierarchy) Entire Codebase Knowledge Graph',
+          description: 'Recommended • Fast Whole-Repo AST Graph',
+          detail: 'Indexes all source files, computes PageRank God Nodes, circular cycles, and builds interactive force canvas',
+          mode: 'codebase',
+        },
+        {
+          label: '$(sparkle) Merged: Graphify Architecture + Full Source Code',
+          description: 'Macro Graph + Source Code Implementations',
+          detail: 'Combines the Graphify architecture map (Mermaid, God Nodes, cycles) with complete source code of classes',
+          mode: 'merged',
+        },
+        ...(filePath
+          ? [
+              {
+                label: `$(git-pull-request) Single File Subgraph: ${path.basename(filePath)}`,
+                description: 'Targeted Dependency Network',
+                detail: `Filters the Knowledge Graph strictly to ${path.basename(filePath)} and its direct/transitive callers & dependencies`,
+                mode: 'subgraph' as const,
+              },
+            ]
+          : []),
+        {
+          label: '$(git-merge) Entire Codebase + Highlight Uncommitted Git Changes',
+          description: 'Git-Aware Architecture Graph',
+          detail: 'Builds whole-codebase graph and highlights all uncommitted/modified files in emerald green',
+          mode: 'gitHighlight',
+        },
+        {
+          label: '$(beaker) Entire Codebase + Include Test Files',
+          description: 'Include Unit & Integration Tests',
+          detail: 'Includes test fixtures and spec files in the Knowledge Graph',
+          mode: 'tests',
+        },
+      ];
+
+      const pick = await vscode.window.showQuickPick<GraphifyChoiceItem>(graphifyChoices, {
+        title: 'Graphify Knowledge Graph — Step 2/2: Select Scope',
+        placeHolder: 'Choose which files to include in the Knowledge Graph',
+      });
+      if (!pick) return;
+
+      if (pick.mode === 'merged') {
+        await promptAndRunGraphify(filePath, undefined, true, false);
+      } else if (pick.mode === 'subgraph') {
+        await promptAndRunGraphify(filePath, path.basename(filePath!), false, true);
+      } else {
+        await promptAndRunGraphify(filePath, undefined, false, false);
+      }
+      return;
+    }
+
+    // Sub-flow 2: AI Code Context Generator
+    if (categoryPick.category === 'promptContext') {
+      let cursorSymbol: string | undefined;
+      const activeEditor = vscode.window.activeTextEditor;
+      if (activeEditor && (!filePath || activeEditor.document.uri.fsPath === filePath)) {
+        const sel = activeEditor.selection;
+        let s = activeEditor.document.getText(sel).trim();
+        if (!s) {
+          const wordRange = activeEditor.document.getWordRangeAtPosition(sel.active);
+          if (wordRange) s = activeEditor.document.getText(wordRange).trim();
+        }
+        if (s && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)) {
+          cursorSymbol = s;
+        }
+      }
+
+      const contextItems: ScopeQuickPickItem[] = [
+        ...(filePath
+          ? [
+              {
+                label: '$(file-code) Active File: Dependencies Only (No Git Changes)',
+                description: `Classic AI Context (${path.basename(filePath)})`,
+                detail: `Extract full AST dependency tree and implementation source code for ${path.basename(filePath)}`,
+                gitScope: 'none' as GitScopeType,
+              },
+              {
+                label: '$(diff) Active File: Git Diff + Dependencies Tree',
+                description: `Current File (${path.basename(filePath)})`,
+                detail: `Include staged & unstaged Git changes for ${path.basename(filePath)} plus upstream/downstream context`,
+                gitScope: 'file' as GitScopeType,
+              },
+              {
+                label: '$(sparkle) Merged: Graphify Architecture + Full Source Code',
+                description: 'Macro Architecture Map + Source Classes',
+                detail: 'Embeds Mermaid architecture flowchart and PageRank God Nodes table right before the full source code blocks',
+                gitScope: 'graphifyMerged' as any,
+              },
+            ]
+          : []),
+        ...(filePath && cursorSymbol
+          ? [
+              {
+                label: `$(symbol-class) Symbol at Cursor: "${cursorSymbol}" + Dependencies`,
+                description: `Targeted AST Symbol (${path.basename(filePath)})`,
+                detail: `Focus AST dependency traversal strictly starting from "${cursorSymbol}"`,
+                gitScope: 'symbol' as any,
+              },
+            ]
+          : []),
+        {
+          label: '$(folder) Entire Workspace / Project Scope',
+          description: 'Trace from Root Boundary',
+          detail: 'Analyze dependencies starting from project boundary or all workspace files',
+          gitScope: 'none' as GitScopeType,
+        },
+      ];
+
+      const contextPick = await vscode.window.showQuickPick(contextItems, {
+        title: filePath
+          ? `AI Code Context Scope (${path.basename(filePath)}) — Step 2/2`
+          : 'AI Code Context Scope — Step 2/2',
+        placeHolder: 'Select which files and dependencies to extract for your AI prompt',
+      });
+      if (!contextPick) return;
+
+      if ((contextPick.gitScope as string) === 'graphifyMerged') {
+        await promptAndRunGraphify(filePath, undefined, true, false);
+        return;
+      }
+
+      if ((contextPick.gitScope as string) === 'symbol') {
+        const targetPath = filePath || workspaceFolder || '';
+        const baseOptions: RunOptions = {
+          symbol: cursorSymbol,
+          gitScope: 'none',
+          includeGitDiff: false,
+        };
+        await promptExportModeAndRun(targetPath, baseOptions, filePath);
+        return;
+      }
+
+      chosenScope = contextPick.gitScope;
+      chosenDescription = contextPick.description || contextPick.label;
+    }
+
+    // Sub-flow 3: Workspace Git Scopes & Commit Tools
+    if (categoryPick.category === 'gitScopes') {
+      const gitItems: ScopeQuickPickItem[] = [
+        {
+          label: '$(git-merge) All Git Changes (Staged + Unstaged) + Dependencies Tree',
+          description: 'Working Tree Scope',
+          detail: 'Discover all modified, added & untracked source files and trace their combined dependency trees',
+          gitScope: 'all',
+        },
+        {
+          label: '$(diff-added) Staged Git Changes ONLY + Dependencies Tree',
+          description: 'git diff --cached',
+          detail: 'Discover only staged (git add) files and trace their combined dependency trees',
+          gitScope: 'staged',
+        },
+        {
+          label: '$(diff-modified) Unstaged Git Changes ONLY + Dependencies Tree',
+          description: 'git diff',
+          detail: 'Discover only unstaged working tree modifications and trace their combined dependency trees',
+          gitScope: 'unstaged',
+        },
+        {
+          label: '$(git-pull-request) Compare Branch / Pull Request + Dependencies Tree...',
+          description: 'Branch / PR Diff',
+          detail: 'Compare current branch against main/develop/origin and trace dependency trees of all PR files',
+          gitScope: 'branch',
+        },
+        {
+          label: '$(git-commit) Last X Commits + Dependencies Tree...',
+          description: 'Recent Commits (HEAD~N)',
+          detail: 'Select last 1, 2, 3, 5, or N commits and trace dependency trees of all touched files',
+          gitScope: 'commits',
+        },
+        {
+          label: '$(comment-discussion) Draft Git Commit Message (Uncommitted Changes)...',
+          description: 'AST Rules or Built-in Model',
+          detail: 'Draft a Conventional Commit message from uncommitted changes and auto-fill the Git commit box',
+          gitScope: 'draftCommit',
+        },
+      ];
+
+      const gitPick = await vscode.window.showQuickPick(gitItems, {
+        title: 'Workspace Git Scopes & Commit Tools — Step 2/2',
+        placeHolder: 'Select Git working tree scope, branch comparison, or commit drafter',
+      });
+      if (!gitPick) return;
+      chosenScope = gitPick.gitScope;
+      chosenDescription = gitPick.description || gitPick.label;
     }
   }
-
-  const entireCodebaseGraphifyItem: ScopeQuickPickItem = {
-    label: '$(type-hierarchy) Graphify: Entire Codebase Knowledge Graph (Interactive + AI Map)',
-    description: 'Whole Repo • PageRank Hubs & Cycles',
-    detail: 'Build an interactive zoomable Knowledge Graph & compact AI Architecture Map of the entire codebase (~95% token savings)',
-    gitScope: 'graphify' as any,
-  };
-
-  const mergedGraphifyItem: ScopeQuickPickItem = {
-    label: '$(sparkle) Graphify + Full Code Context (Merged Architecture & Classes)',
-    description: 'Macro Graph + Source Code Implementations',
-    detail: 'Combines the Graphify architecture map (Mermaid, PageRank God Nodes, cycles) with complete source code of classes',
-    gitScope: 'graphifyMerged' as any,
-  };
-
-  const fileItem: ScopeQuickPickItem | undefined = filePath
-    ? {
-        label: '$(file-code) Active File: Dependencies Only (No Git Changes)',
-        description: `Classic AI Context (${path.basename(filePath)})`,
-        detail: `Trace full AST dependency tree and extract source code of ${path.basename(filePath)} without Git diffs`,
-        gitScope: 'none',
-      }
-    : undefined;
-
-  const singleFileGitItem: ScopeQuickPickItem | undefined = filePath
-    ? {
-        label: '$(diff) Active File: Git Diff + Dependencies Tree',
-        description: `Current File (${path.basename(filePath)})`,
-        detail: `Trace dependency tree of ${path.basename(filePath)} and include staged/unstaged git changes + source code`,
-        gitScope: 'file',
-      }
-    : undefined;
-
-  const fileGraphifyItem: ScopeQuickPickItem | undefined = filePath
-    ? {
-        label: `$(type-hierarchy) Graphify: Single File Subgraph (${path.basename(filePath)})`,
-        description: 'Focused Dependency Network',
-        detail: `Open interactive visual graph filtered strictly to ${path.basename(filePath)} and its upstream/downstream dependencies`,
-        gitScope: 'graphifyFile' as any,
-      }
-    : undefined;
-
-  const cursorItem: ScopeQuickPickItem | undefined = (filePath && cursorSymbol)
-    ? {
-        label: `$(symbol-class) Symbol at Cursor: "${cursorSymbol}" + Dependencies`,
-        description: `Targeted AST Root (${path.basename(filePath)})`,
-        detail: `Focus AST dependency traversal starting strictly from symbol "${cursorSymbol}"`,
-        gitScope: 'symbol' as any,
-      }
-    : undefined;
-
-  const gitItems: ScopeQuickPickItem[] = [
-    {
-      label: '$(git-merge) All Git Changes (Staged + Unstaged) + Dependencies Tree',
-      description: 'Working Tree Scope',
-      detail: 'Discover all modified, added & untracked source files and trace their combined dependency trees',
-      gitScope: 'all',
-    },
-    {
-      label: '$(diff-added) Staged Git Changes ONLY + Dependencies Tree',
-      description: 'git diff --cached',
-      detail: 'Discover only staged (git add) files and trace their combined dependency trees',
-      gitScope: 'staged',
-    },
-    {
-      label: '$(diff-modified) Unstaged Git Changes ONLY + Dependencies Tree',
-      description: 'git diff',
-      detail: 'Discover only unstaged working tree modifications and trace their combined dependency trees',
-      gitScope: 'unstaged',
-    },
-    {
-      label: '$(git-pull-request) Compare Branch / Pull Request + Dependencies Tree...',
-      description: 'Branch / PR Diff',
-      detail: 'Compare current branch against main/develop/origin and trace dependency trees of all PR files',
-      gitScope: 'branch',
-    },
-    {
-      label: '$(git-commit) Last X Commits + Dependencies Tree...',
-      description: 'Recent Commits (HEAD~N)',
-      detail: 'Select last 1, 2, 3, 5, or N commits and trace dependency trees of all touched files',
-      gitScope: 'commits',
-    },
-    {
-      label: '$(comment-discussion) Draft Git Commit Message (Uncommitted Changes)...',
-      description: 'AST Rules or Built-in Model',
-      detail: 'Draft a Conventional Commit message from uncommitted changes and auto-fill the Git commit box',
-      gitScope: 'draftCommit',
-    },
-  ];
-
-  const scopeItems: ScopeQuickPickItem[] = [];
-  if (gitFirst) {
-    scopeItems.push(...gitItems);
-    scopeItems.push(entireCodebaseGraphifyItem);
-    scopeItems.push(mergedGraphifyItem);
-    if (singleFileGitItem) scopeItems.push(singleFileGitItem);
-    if (fileItem) scopeItems.push(fileItem);
-    if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
-    if (cursorItem) scopeItems.push(cursorItem);
-  } else {
-    // Entire Codebase is #1 for Graphify, followed by Merged Graphify, then file options
-    scopeItems.push(entireCodebaseGraphifyItem);
-    scopeItems.push(mergedGraphifyItem);
-    if (fileItem) scopeItems.push(fileItem);
-    if (singleFileGitItem) scopeItems.push(singleFileGitItem);
-    if (fileGraphifyItem) scopeItems.push(fileGraphifyItem);
-    if (cursorItem) scopeItems.push(cursorItem);
-    scopeItems.push(...gitItems);
-  }
-
-  let chosenScope = preselectedScope;
-  let chosenDescription = preselectedScope || '';
 
   if (chosenScope && (chosenScope === 'none' || chosenScope === 'file') && !filePath) {
     vscode.window.showErrorMessage('Please open a source file in the editor first, or choose a Workspace Git Scope.');
     return;
   }
 
-  // Popup 1: Select Scope (unless preselected from a specific sidebar shortcut)
-  if (!chosenScope) {
-    const scopePick = await vscode.window.showQuickPick(scopeItems, {
-      title: filePath
-        ? `Graphify — Codebase Graph & AI Context: ${path.basename(filePath)}`
-        : 'Graphify — Codebase Graph & AI Context: Git & Workspace Scopes',
-      placeHolder: 'Select Context Scope (Interactive Graph, File Dependencies, Git Scopes)',
-    });
-    if (!scopePick) return;
-    chosenScope = scopePick.gitScope;
-    chosenDescription = scopePick.description || scopePick.label;
-  } else {
-    const matched = scopeItems.find((i) => i.gitScope === chosenScope);
-    chosenDescription = matched?.description || chosenScope;
-  }
-
-  let compareBranch: string | undefined;
-  let commitCount: number | undefined;
-
-  if ((chosenScope as string) === 'graphifyMerged') {
-    await promptAndRunGraphify(filePath, undefined, true);
-    return;
-  } else if ((chosenScope as string) === 'graphifyFile') {
-    await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined, false, true);
-    return;
-  } else if ((chosenScope as string) === 'symbol') {
-    const targetPath = filePath || workspaceFolder || '';
-    const baseOptions: RunOptions = {
-      symbol: cursorSymbol,
-      gitScope: 'none',
-      includeGitDiff: false,
-    };
-    await runGeneration(targetPath, baseOptions);
-    return;
-  } else if (chosenScope === 'graphify') {
-    await promptAndRunGraphify(filePath);
-    return;
-  } else if (chosenScope === 'draftCommit') {
+  if (chosenScope === 'draftCommit') {
     await promptAndDraftCommitMessage(filePath);
     return;
   } else if (chosenScope === 'branch') {
@@ -1028,8 +1101,6 @@ async function showScopeAndExportPopups(
     if (!commitCount) return;
     chosenDescription = `Last ${commitCount} Commit(s)`;
   }
-
-  let includeGitDiff = true;
 
   // Popup 2: Select Output Content (only when a Git scope is chosen)
   if (chosenScope !== 'none') {
@@ -1050,18 +1121,34 @@ async function showScopeAndExportPopups(
       ],
       {
         title: `Git Context Content (${chosenDescription})`,
-        placeHolder: 'Step 2: Choose whether to include the unified (+ / -) Git diff block in the Markdown',
+        placeHolder: 'Choose whether to include the unified (+ / -) Git diff block in the Markdown',
       }
     );
     if (!diffPick) return;
     includeGitDiff = diffPick.includeDiff;
   }
 
-  // Popup 3: Export with Defaults vs Graphify vs Custom Options
+  const baseOptions: RunOptions = {
+    gitScope: chosenScope,
+    includeGitDiff,
+    workspacePath: workspaceFolder,
+    compareBranch,
+    commitCount,
+  };
+
+  const targetPath = filePath || workspaceFolder || '';
+  await promptExportModeAndRun(targetPath, baseOptions, filePath);
+}
+
+async function promptExportModeAndRun(
+  targetPath: string,
+  baseOptions: RunOptions,
+  filePath?: string
+) {
   const ui = getUiStrings();
   const activeLang = getActiveLanguageOption();
   interface ExportModeQuickPickItem extends vscode.QuickPickItem {
-    actionType: 'defaults' | 'graphify' | 'custom';
+    actionType: 'defaults' | 'custom';
   }
 
   const modePick = await vscode.window.showQuickPick<ExportModeQuickPickItem>(
@@ -1073,40 +1160,20 @@ async function showScopeAndExportPopups(
         actionType: 'defaults',
       },
       {
-        label: '$(type-hierarchy) Graphify: Open Interactive Knowledge Graph',
-        description: `Visual Force Canvas & Architecture Map${filePath ? ` (${path.basename(filePath)})` : ''}`,
-        detail: 'Launch the interactive zoomable visual graph dashboard with PageRank God Nodes, circular cycles & clusters',
-        actionType: 'graphify',
-      },
-      {
         label: ui.customOptions,
         description: 'Step-by-Step Configuration',
-        detail: 'Configure token budget, comment stripping, traversal depth, output language, destination & custom prompt',
+        detail: 'Configure token budget (max tokens), comment removal (preserve/remove/auto), traversal depth & custom task prompt',
         actionType: 'custom',
       },
     ],
     {
       title: `${ui.chooseExportMode} (${activeLang.flag} ${activeLang.nativeName})`,
-      placeHolder: 'Instant Defaults, Graphify Visualizer, or Step-by-Step Custom Options',
+      placeHolder: 'Instant Defaults or Step-by-Step Custom Options (Tokens, Comments, Depth)',
     }
   );
   if (!modePick) return;
 
-  if (modePick.actionType === 'graphify') {
-    await promptAndRunGraphify(filePath, filePath ? path.basename(filePath) : undefined);
-    return;
-  }
-
-  const baseOptions: RunOptions = {
-    gitScope: chosenScope,
-    includeGitDiff,
-    workspacePath: workspaceFolder,
-    compareBranch,
-    commitCount,
-    outputLanguage: activeLang.code,
-  };
-
-  const targetPath = filePath || workspaceFolder || '';
+  baseOptions.outputLanguage = activeLang.code;
 
   if (modePick.actionType === 'defaults') {
     await runGeneration(targetPath, baseOptions);

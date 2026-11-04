@@ -3,7 +3,7 @@
   "displayName": "Graphify — Codebase Graph & AI Context Builder",
   "icon": "media/icon.png",
   "description": "Graphify your codebase into an interactive AST Knowledge Graph, generate dependency-aware AI prompts & Git diffs, and draft commits.",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
