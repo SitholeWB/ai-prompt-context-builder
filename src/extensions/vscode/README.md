@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="media/icon.png" width="128" height="128" alt="AI Prompt Context Builder Icon" style="border-radius: 24px;" />
+<img src="https://raw.githubusercontent.com/SitholeWB/ai-prompt-context-builder/main/src/extensions/vscode/media/icon.png" width="128" height="128" alt="AI Prompt Context Builder Icon" style="border-radius: 24px;" />
 
 # 🕸️ Graphify — Codebase Graph & AI Context Builder
 
@@ -31,7 +31,7 @@
 **Give ChatGPT, Claude, Copilot, and DeepSeek a complete mental model of your entire repository—without installing external Python packages or wasting 100,000+ tokens.**
 
 <p align="center">
-  <img src="media/graphify-visualizer-demo.png" alt="Graphify Interactive Codebase Knowledge Graph Canvas" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
+  <img src="https://raw.githubusercontent.com/SitholeWB/ai-prompt-context-builder/main/src/extensions/vscode/media/graphify-visualizer-demo.png" alt="Graphify Interactive Codebase Knowledge Graph Canvas" width="100%" style="border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.4);" />
 </p>
 
 Built directly into the extension with **zero external dependencies**, **Graphify** scans your entire codebase across 20+ languages and produces:
@@ -50,12 +50,12 @@ Built directly into the extension with **zero external dependencies**, **Graphif
 Generate clean, dependency-aware AI prompts directly inside your editor with single-click ease.
 
 <p align="center">
-  <img src="media/context-menu-demo.png" alt="Single Right-Click Graphify Menu in VS Code" width="46%" style="border-radius: 8px; vertical-align: top; margin-right: 2%; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
-  <img src="media/sidebar-demo.png" alt="Graphify Activity Bar Sidebar" width="49%" style="border-radius: 8px; vertical-align: top; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+  <img src="https://raw.githubusercontent.com/SitholeWB/ai-prompt-context-builder/main/src/extensions/vscode/media/context-menu-demo.png" alt="Single Right-Click Graphify Menu in VS Code" width="46%" style="border-radius: 8px; vertical-align: top; margin-right: 2%; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
+  <img src="https://raw.githubusercontent.com/SitholeWB/ai-prompt-context-builder/main/src/extensions/vscode/media/sidebar-demo.png" alt="Graphify Activity Bar Sidebar" width="49%" style="border-radius: 8px; vertical-align: top; box-shadow: 0 4px 12px rgba(0,0,0,0.3);" />
 </p>
 
 <p align="center">
-  <img src="media/popup-options-demo.png" alt="Streamlined Category Popup Wizard" width="97%" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-top: 8px;" />
+  <img src="https://raw.githubusercontent.com/SitholeWB/ai-prompt-context-builder/main/src/extensions/vscode/media/popup-options-demo.png" alt="Streamlined Category Popup Wizard" width="97%" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin-top: 8px;" />
 </p>
 
 ### How to Use

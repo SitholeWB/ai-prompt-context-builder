@@ -3,7 +3,7 @@
   "displayName": "Graphify — Codebase Graph & AI Context Builder",
   "icon": "media/icon.png",
   "description": "Graphify your codebase into an interactive AST Knowledge Graph, generate dependency-aware AI prompts & Git diffs, and draft commits.",
-  "version": "2.3.8",
+  "version": "2.3.9",
   "publisher": "sitholewb",
   "author": {
     "name": "Welcome Bonginhlahla Sithole",
@@ -12,7 +12,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SitholeWB/ai-prompt-context-builder.git"
+    "url": "https://github.com/SitholeWB/ai-prompt-context-builder.git",
+    "directory": "src/extensions/vscode"
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
